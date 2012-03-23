@@ -3,7 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- Plugin LDAP authentication for Yesod, based heavily on Yesod.Auth.Kerberos.
+-- Plugin LDAP authentication for Yesod, based heavily on Yesod.Auth.Kerberos
+-- and Yesod.Auth.Email
 -- Verify that your LDAP installation can bind and return LDAP objects before
 -- trying to use this module.
 
