@@ -1,17 +1,17 @@
-name:            yesod-auth-ldap
-version:         0.0.2
+name:            yesod-auth-ldap-extended
+version:         0.0.0.1
 license:         BSD3
 license-file:    LICENSE
-author:          Michael Litchard 
-maintainer:      Michael Litchard 
-synopsis:        LDAP Authentication for Yesod.
+author:          Michael Litchard, Jan-Philip Loos
+maintainer:      Jan-Philip Loos
+synopsis:        LDAP Authentication, Verification and Registration for Yesod.
 category:        Web, Yesod
 stability:       experimental 
 cabal-version:   >= 1.6.0
 build-type:      Simple
 homepage:        http://www.yesodweb.com/
 extra-source-files: include/qq.h
-description:     LDAP Authentication for Yesod.
+description:     LDAP Authentication, Registration for Yesod. forked from yesod-auth-ldap by Michael Litchard
 
 flag ghc7
 
@@ -37,4 +37,4 @@ library
 
 source-repository head
   type:     git
-  location: git://github.com:mlitchard/yesod-auth-ldap.git
+  location: git://github.com/MaxDaten/yesod-auth-ldap-extended.git 
