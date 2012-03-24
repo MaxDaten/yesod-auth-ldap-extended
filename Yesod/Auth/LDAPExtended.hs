@@ -11,13 +11,8 @@
 
 -- sample manual LDAP code here
 
--- 
-
-module Yesod.Auth.LDAP
-   ( genericAuthLDAP
-   , LDAPConfig (..)) where
-
-#include "qq.h"
+module Yesod.Auth.LDAPExtended
+    ( genericAuthLDAP ) where
 
 import Yesod.Auth
 import Yesod.Auth.Message
@@ -25,31 +20,19 @@ import Web.Authenticate.LDAP
 import LDAP
 import Data.Text (Text,pack,unpack)
 import Text.Hamlet
-import Yesod.Handler
-import Yesod.Widget
+import Text.Blaze (toHtml)
 import Control.Monad.IO.Class (liftIO)
-import Yesod.Form
 import Control.Applicative ((<$>), (<*>))
 
-data LDAPConfig = LDAPConfig {
-   -- | When a user gives username x, f(x) will be passed to LDAP
-   usernameModifier :: Text -> Text 
-   -- | During the second bind, the username must be converted to a valid DN
- ,  nameToDN :: Text -> String 
-   -- | When a user gives username x, f(x) will be passed to Yesod
- , identifierModifier :: Text -> [LDAPEntry] -> Text
- , ldapHost :: String
- , ldapPort' :: LDAPInt
- , initDN :: String -- DN for initial binding, must have authority to search
- , initPass :: String -- Password for initDN
- , baseDN :: Maybe String -- Base DN for user search, if any
- , ldapScope :: LDAPScope
- }  
+import Yesod.Form
+import Yesod.Handler
+import Yesod.Content
+import Yesod.Core (PathPiece, fromPathPiece, whamlet, defaultLayout, setTitleI, toPathPiece)
 
 
-genericAuthLDAP :: YesodAuth m => LDAPConfig -> AuthPlugin m
-genericAuthLDAP config = AuthPlugin "LDAP" dispatch $ \tm -> addHamlet
-    [QQ(hamlet)|
+genericAuthLDAP :: YesodAuth m => LdapAuthConfig -> LdapBindConfig -> AuthPlugin m
+genericAuthLDAP config bindConfig = AuthPlugin "LDAP" dispatch $ \tm ->
+    [whamlet|
     <div id="header">
          <h1>Login
 
@@ -75,21 +58,21 @@ genericAuthLDAP config = AuthPlugin "LDAP" dispatch $ \tm -> addHamlet
                 }
 |]
   where
-    dispatch "POST" ["login"] = postLoginR config >>= sendResponse
+    dispatch "POST" ["login"] = postLoginR config bindConfig >>= sendResponse
     dispatch _ _              = notFound
 
 login :: AuthRoute
 login = PluginR "LDAP" ["login"]
 
 
-postLoginR :: (YesodAuth y) => LDAPConfig -> GHandler Auth y ()
-postLoginR config = do
+postLoginR :: (YesodAuth y) => LdapAuthConfig -> LdapBindConfig -> GHandler Auth y ()
+postLoginR config bindConfig = do
     (mu,mp) <- runInputPost $ (,)
         <$> iopt textField "username"
         <*> iopt textField "password"
 
     let errorMessage (message :: Text) = do
-        setMessage [QQ(shamlet)|Error: #{message}|]
+        setMessage $ toHtml message
         toMaster <- getRouteToMaster
         redirect $ toMaster LoginR
 
@@ -101,21 +84,13 @@ postLoginR config = do
             mr <- getMessageRender
             errorMessage $ mr PleaseProvidePassword
         (Just u , Just p ) -> do
-          result <- liftIO $ loginLDAP (usernameModifier config u)
-                                       (nameToDN config u)
-                                       (unpack p)
-                                       (ldapHost config)
-                                       (ldapPort' config)
-                                       (initDN config)
-                                       (initPass config)
-                                       (baseDN config)
-                                       (ldapScope config)
-                                       
-                                       
+          result <- liftIO $ loginLDAP config 
+                                       (Credentials u p (pack "")) -- todo empty mail -> Maybe
+                                       bindConfig
           case result of
-            Ok ldapEntries -> do
+            AuthOk ldapEntries -> do
                  let creds = Creds
-                       { credsIdent  = identifierModifier config u ldapEntries 
+                       { credsIdent  = pack $ ledn $ head ldapEntries 
                        , credsPlugin = "LDAP"
                        , credsExtra  = []
                        }
