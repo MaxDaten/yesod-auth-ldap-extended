@@ -17,6 +17,7 @@ module Yesod.Auth.LDAPExtended
     ( genericAuthLDAP 
     , YesodAuthLdap (..)
     , registerR 
+    , setpassR
     ) where
 
 import System.Random
@@ -31,6 +32,7 @@ import Network.Mail.Mime (randomString)
 import Data.Text (Text)
 import Text.Hamlet
 import Text.Blaze (toHtml)
+import Control.Monad                 (when)  
 import Control.Monad.IO.Class (liftIO)
 import Control.Applicative ((<$>), (<*>))
 
@@ -41,8 +43,9 @@ import Yesod.Core (PathPiece, fromPathPiece, whamlet, defaultLayout, setTitleI, 
 
 import qualified Yesod.Auth.Message as Msg
 
-registerR :: AuthRoute
+registerR, setpassR :: AuthRoute
 registerR = PluginR "ldap" ["register"]
+setpassR = PluginR "ldap" ["set-password"]
 
 verify :: Text -> Text -> AuthRoute
 verify eid verkey = PluginR "ldap" ["verify", eid, verkey]
@@ -54,6 +57,7 @@ type VerUrl = Text
 class (YesodAuth m) => YesodAuthLdap m where
     --type AuthLdapId m
     sendVerifyEmail :: Email -> VerKey -> VerUrl -> GHandler Auth m ()
+    register :: Text -> Text -> AuthId m -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (LDAPRegResult)
 
 
 genericAuthLDAP :: YesodAuthLdap m => LdapAuthConfig -> LdapBindConfig -> AuthPlugin m
@@ -87,6 +91,12 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
     dispatch "POST" ["login"]       = postLoginR config bindConfig >>= sendResponse
     dispatch "GET"  ["register"]    = getRegisterR  >>= sendResponse
     dispatch "POST" ["register"]    = postRegisterR config bindConfig >>= sendResponse
+    dispatch "GET"  ["verify", eid, verkey] =
+        case fromPathPiece eid of
+            Nothing -> notFound
+            Just eid' -> getVerifyR eid' verkey config bindConfig >>= sendResponse
+    dispatch "GET"  ["set-password"] = getPasswordR >>= sendResponse
+    dispatch "POST" ["set-password"] = postPasswordR config bindConfig >>= sendResponse
     dispatch _ _              = notFound
 
 login :: AuthRoute
@@ -151,6 +161,7 @@ postRegisterR auth bind = do
             Just (Left _) -> do
                 --key <- liftIO $ randomKey y
                 -- setVerifyKey lid key
+                -- TODO
                 return (undefined)
                 
             -- no entry existing
@@ -166,6 +177,90 @@ postRegisterR auth bind = do
     defaultLayout $ do
         setTitleI Msg.ConfirmationEmailSentTitle
         [whamlet| <p>_{Msg.ConfirmationEmailSent email} |]
+
+-- TODO: first argument (email) to a specific YesodAuth (like the 'AuthEmailId' in Yesod.Auth.Email
+getVerifyR :: YesodAuthLdap master
+           =>  Text -> Text -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth master RepHtml
+getVerifyR mail key auth bind = do
+    (EmailRes entry) <- liftIO $ getByEmail mail auth bind
+    case entry of
+         -- already verified registered
+        Just (Left _) -> return ()
+        Just (Right realKey) -> do
+            
+            case (realKey == key) of
+                (True) -> do
+                    liftIO $ removeUnverified key auth bind
+                    setCreds False $ Creds "ldap" mail [("verifiedEmail", mail)] -- FIXME uid?
+                    toMaster <- getRouteToMaster
+                    setMessageI Msg.AddressVerified
+                    redirect $ toMaster setpassR
+                _ -> return ()
+        _ -> return ()
+        
+    defaultLayout $ do
+        setTitleI Msg.InvalidKey
+        [whamlet| <p>_{Msg.InvalidKey} |]
+            
+getPasswordR ::YesodAuthLdap master => GHandler Auth master RepHtml
+getPasswordR = do
+    toMaster <- getRouteToMaster
+    maid <- maybeAuthId
+    case maid of
+        Just _ -> return ()
+        Nothing -> do
+            setMessageI Msg.BadSetPass
+            redirect $ toMaster LoginR
+    defaultLayout $ do
+        setTitleI Msg.SetPassTitle
+        [whamlet|
+<h3>_{Msg.SetPass}
+<form method="post" action="@{toMaster setpassR}">
+    <table>
+        <tr>
+            <th>"Username"
+            <td>
+                <input type="text" name="username">
+        <tr>
+            <th>_{Msg.NewPass}
+            <td>
+                <input type="password" name="new">
+        <tr>
+            <th>_{Msg.ConfirmPass}
+            <td>
+                <input type="password" name="confirm">
+        <tr>
+            <td colspan="2">
+                <input type="submit" value="_{Msg.SetPassTitle}">
+|]
+
+postPasswordR :: YesodAuthLdap master => LdapAuthConfig -> LdapBindConfig -> GHandler Auth master ()
+postPasswordR auth bind = do
+    (username, new, confirm) <- runInputPost $ (,,)
+        <$> ireq textField "username"
+        <*> ireq textField "new"
+        <*> ireq textField "confirm"
+    toMaster <- getRouteToMaster
+    y <- getYesod
+    when (new /= confirm) $ do
+        setMessageI Msg.PassMismatch
+        redirect $ toMaster setpassR
+    maid <- maybeAuthId
+    aid <- case maid of
+            Nothing -> do
+                setMessageI Msg.BadSetPass
+                redirect $ toMaster LoginR
+            Just aid -> return aid
+    
+    res <- register username new aid auth bind
+    case res of
+        RegOk -> return ()
+        e     -> do 
+                    setMessage $ toHtml $ show e
+                    redirect $ toMaster LoginR
+    
+    setMessageI Msg.PassUpdated
+    redirect $ loginDest y
 
 {--
     utility functions
