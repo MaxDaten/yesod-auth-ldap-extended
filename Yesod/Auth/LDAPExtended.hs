@@ -4,6 +4,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 -- Plugin LDAP authentication for Yesod, based heavily on Yesod.Auth.Kerberos
 -- and Yesod.Auth.Email
@@ -24,6 +26,7 @@ import System.Random
 
 import Yesod.Auth
 import Yesod.Auth.Message
+import Yesod.Message (RenderMessage (..))
 import Web.Authenticate.LDAP
 import LDAP
 import qualified Data.Text as TS
@@ -42,6 +45,8 @@ import Yesod.Content
 import Yesod.Core (PathPiece, fromPathPiece, whamlet, defaultLayout, setTitleI, toPathPiece)
 
 import qualified Yesod.Auth.Message as Msg
+import Yesod.Auth.LdapMessages as LdapM
+import Yesod.Auth.LdapMessages (LdapMessage, defaultMessage)
 
 registerR, setpassR :: AuthRoute
 registerR = PluginR "ldap" ["register"]
@@ -54,10 +59,13 @@ type Email = Text
 type VerKey = Text
 type VerUrl = Text
 
-class (YesodAuth m) => YesodAuthLdap m where
+class (YesodAuth m, RenderMessage m FormMessage) => YesodAuthLdap m where
     --type AuthLdapId m
     sendVerifyEmail :: Email -> VerKey -> VerUrl -> GHandler Auth m ()
     register :: Text -> Text -> AuthId m -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (LDAPRegResult)
+    
+    renderLdapMessage :: m -> [Text] -> LdapMessage -> Text
+    renderLdapMessage _ _ = LdapM.defaultMessage
 
 
 genericAuthLDAP :: YesodAuthLdap m => LdapAuthConfig -> LdapBindConfig -> AuthPlugin m
@@ -140,11 +148,11 @@ getRegisterR = do
     toMaster <- getRouteToMaster
     defaultLayout $ do
         [whamlet|
-<p>"ABC"
+<p>_{Msg.EnterEmail}
 <form method="post" action="@{toMaster registerR}">
-    <label for="email">"mail"
+    <label for="email">_{Msg.Email}
     <input type="email" name="email" width="150">
-    <input type="submit" value="Reg">
+    <input type="submit" value=_{Msg.Register}>
 |]
 
 postRegisterR :: (YesodAuthLdap master) => LdapAuthConfig -> LdapBindConfig -> GHandler Auth master RepHtml
@@ -162,8 +170,9 @@ postRegisterR auth bind = do
                 --key <- liftIO $ randomKey y
                 -- setVerifyKey lid key
                 -- TODO
-                return (undefined)
-                
+                toMaster <- getRouteToMaster
+                setMessageI LdapM.EmailAlreadyRegistered
+                redirect $ toMaster LoginR
             -- no entry existing
             Nothing -> do
                 key <- liftIO $ randomKey y
@@ -218,7 +227,7 @@ getPasswordR = do
 <form method="post" action="@{toMaster setpassR}">
     <table>
         <tr>
-            <th>"Username"
+            <th>_{LdapM.Username}
             <td>
                 <input type="text" name="username">
         <tr>
@@ -271,3 +280,6 @@ randomKey :: m -> IO Text
 randomKey _ = do
     stdgen <- newStdGen
     return $ TS.pack $ fst $ randomString 10 stdgen
+
+instance YesodAuthLdap m => RenderMessage m LdapMessage where
+    renderMessage = renderLdapMessage

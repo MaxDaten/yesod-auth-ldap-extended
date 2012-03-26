@@ -35,6 +35,7 @@ library
                    , mime-mail               >= 0.3       && < 0.5
 
     exposed-modules: Yesod.Auth.LDAPExtended
+                     Yesod.Auth.LdapMessages
 
     ghc-options:     -Wall
 
