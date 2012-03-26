@@ -33,6 +33,7 @@ import qualified Data.Text as TS
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import Network.Mail.Mime (randomString)
 import Data.Text (Text)
+import Data.Maybe (fromJust)
 import Text.Hamlet
 import Text.Blaze (toHtml)
 import Control.Monad                 (when)  
@@ -68,27 +69,30 @@ class (YesodAuth m, RenderMessage m FormMessage) => YesodAuthLdap m where
     renderLdapMessage _ _ = LdapM.defaultMessage
 
 
-genericAuthLDAP :: YesodAuthLdap m => LdapAuthConfig -> LdapBindConfig -> AuthPlugin m
+genericAuthLDAP :: YesodAuthLdap m
+                => LdapAuthConfig 
+                -> LdapBindConfig 
+                -> AuthPlugin m
 genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
     [whamlet|
     <div id="header">
-         <h1>Login
+         <h1>_{Msg.LoginTitle}
 
     <div id="login">
         <form method="post" action="@{tm login}">
             <table>
                 <tr>
-                    <th>Username:
+                    <th>_{LdapM.Username}
                     <td>
                         <input id="x" name="username" autofocus="" required>
                 <tr>
-                    <th>Password:
+                    <th>_{Msg.Password}
                     <td>
                         <input type="password" name="password" required>
                 <tr>
                     <td>&nbsp;
                     <td>
-                        <input type="submit" value="Login">
+                        <input type="submit" value=_{Msg.LoginTitle}>
 
             <script>
                 if (!("autofocus" in document.createElement("input"))) {
@@ -111,7 +115,11 @@ login :: AuthRoute
 login = PluginR "ldap" ["login"]
 
 
-postLoginR :: (YesodAuthLdap master) => LdapAuthConfig -> LdapBindConfig -> GHandler Auth master ()
+
+postLoginR :: (YesodAuthLdap master)
+            => LdapAuthConfig 
+            -> LdapBindConfig 
+            -> GHandler Auth master ()
 postLoginR config bindConfig = do
     (mu,mp) <- runInputPost $ (,)
         <$> iopt textField "username"
@@ -134,14 +142,17 @@ postLoginR config bindConfig = do
                                        (Credentials u p (TS.pack "")) -- todo empty mail -> Maybe
                                        bindConfig
           case result of
-            AuthOk ldapEntries -> do
+            AuthOk [LDAPEntry _ attrs] -> do
+                 [mail] <- return $ fromJust $ lookup "mail" attrs
                  let creds = Creds
-                       { credsIdent  = TS.pack $ ledn $ head ldapEntries -- TODO: make it better
+                       { credsIdent  = TS.pack mail -- TODO: make it better
                        , credsPlugin = "ldap"
                        , credsExtra  = []
                        }
                  setCreds True creds
             ldapError -> errorMessage (TS.pack $ show ldapError)
+
+
 
 getRegisterR :: (YesodAuthLdap master) => GHandler Auth master RepHtml
 getRegisterR = do
@@ -155,7 +166,12 @@ getRegisterR = do
     <input type="submit" value=_{Msg.Register}>
 |]
 
-postRegisterR :: (YesodAuthLdap master) => LdapAuthConfig -> LdapBindConfig -> GHandler Auth master RepHtml
+
+
+postRegisterR :: (YesodAuthLdap master) 
+              => LdapAuthConfig 
+              -> LdapBindConfig 
+              -> GHandler Auth master RepHtml
 postRegisterR auth bind = do
     y <- getYesod
     email <- runInputPost $ ireq emailField "email"
@@ -167,12 +183,10 @@ postRegisterR auth bind = do
             
             -- already registered ? what to do? revalidate to set a new pw?
             Just (Left _) -> do
-                --key <- liftIO $ randomKey y
-                -- setVerifyKey lid key
-                -- TODO
                 toMaster <- getRouteToMaster
                 setMessageI LdapM.EmailAlreadyRegistered
                 redirect $ toMaster LoginR
+            
             -- no entry existing
             Nothing -> do
                 key <- liftIO $ randomKey y
@@ -187,9 +201,15 @@ postRegisterR auth bind = do
         setTitleI Msg.ConfirmationEmailSentTitle
         [whamlet| <p>_{Msg.ConfirmationEmailSent email} |]
 
+
+
 -- TODO: first argument (email) to a specific YesodAuth (like the 'AuthEmailId' in Yesod.Auth.Email
-getVerifyR :: YesodAuthLdap master
-           =>  Text -> Text -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth master RepHtml
+getVerifyR :: YesodAuthLdap master 
+           => Text 
+           -> Text 
+           -> LdapAuthConfig 
+           -> LdapBindConfig 
+           -> GHandler Auth master RepHtml
 getVerifyR mail key auth bind = do
     (EmailRes entry) <- liftIO $ getByEmail mail auth bind
     case entry of
@@ -210,8 +230,11 @@ getVerifyR mail key auth bind = do
     defaultLayout $ do
         setTitleI Msg.InvalidKey
         [whamlet| <p>_{Msg.InvalidKey} |]
-            
-getPasswordR ::YesodAuthLdap master => GHandler Auth master RepHtml
+
+
+
+getPasswordR :: YesodAuthLdap master 
+             => GHandler Auth master RepHtml
 getPasswordR = do
     toMaster <- getRouteToMaster
     maid <- maybeAuthId
@@ -223,7 +246,7 @@ getPasswordR = do
     defaultLayout $ do
         setTitleI Msg.SetPassTitle
         [whamlet|
-<h3>_{Msg.SetPass}
+<h3>_{Msg.Register}
 <form method="post" action="@{toMaster setpassR}">
     <table>
         <tr>
@@ -240,10 +263,15 @@ getPasswordR = do
                 <input type="password" name="confirm">
         <tr>
             <td colspan="2">
-                <input type="submit" value="_{Msg.SetPassTitle}">
+                <input type="submit" value=_{Msg.Register}>
 |]
 
-postPasswordR :: YesodAuthLdap master => LdapAuthConfig -> LdapBindConfig -> GHandler Auth master ()
+
+
+postPasswordR :: YesodAuthLdap master 
+              => LdapAuthConfig 
+              -> LdapBindConfig 
+              -> GHandler Auth master ()
 postPasswordR auth bind = do
     (username, new, confirm) <- runInputPost $ (,,)
         <$> ireq textField "username"
@@ -264,8 +292,9 @@ postPasswordR auth bind = do
     res <- register username new aid auth bind
     case res of
         RegOk -> return ()
+        -- TODO
         e     -> do 
-                    setMessage $ toHtml $ show e
+                    setMessageI $ RegistrationError e username
                     redirect $ toMaster LoginR
     
     setMessageI Msg.PassUpdated
