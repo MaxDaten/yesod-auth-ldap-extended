@@ -50,20 +50,25 @@ import Yesod.Auth.LdapMessages as LdapM
 import Yesod.Auth.LdapMessages (LdapMessage, defaultMessage)
 
 registerR, setpassR :: AuthRoute
-registerR = PluginR "ldap" ["register"]
-setpassR = PluginR "ldap" ["set-password"]
+registerR   = PluginR "ldap" ["register"]
+setpassR    = PluginR "ldap" ["set-password"]
 
 verify :: Text -> Text -> AuthRoute
 verify eid verkey = PluginR "ldap" ["verify", eid, verkey]
 
-type Email = Text
+type Email  = Text
 type VerKey = Text
 type VerUrl = Text
+type Pass   = Text
+
+newUserSKey :: Text
+newUserSKey = "_NEWUSER"
 
 class (YesodAuth m, RenderMessage m FormMessage) => YesodAuthLdap m where
     --type AuthLdapId m
     sendVerifyEmail :: Email -> VerKey -> VerUrl -> GHandler Auth m ()
-    register :: Text -> Text -> AuthId m -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (LDAPRegResult)
+    register        :: Email -> Pass -> AuthId m -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (LDAPRegResult)
+    updatePassword  :: AuthId m -> Pass -> Pass -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (LDAPPassUpdateResult)
     
     renderLdapMessage :: m -> [Text] -> LdapMessage -> Text
     renderLdapMessage _ _ = LdapM.defaultMessage
@@ -107,8 +112,10 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
         case fromPathPiece eid of
             Nothing -> notFound
             Just eid' -> getVerifyR eid' verkey config bindConfig >>= sendResponse
+    
     dispatch "GET"  ["set-password"] = getPasswordR >>= sendResponse
     dispatch "POST" ["set-password"] = postPasswordR config bindConfig >>= sendResponse
+    
     dispatch _ _              = notFound
 
 login :: AuthRoute
@@ -205,8 +212,8 @@ postRegisterR auth bind = do
 
 -- TODO: first argument (email) to a specific YesodAuth (like the 'AuthEmailId' in Yesod.Auth.Email
 getVerifyR :: YesodAuthLdap master 
-           => Text 
-           -> Text 
+           => Email 
+           -> VerKey 
            -> LdapAuthConfig 
            -> LdapBindConfig 
            -> GHandler Auth master RepHtml
@@ -220,7 +227,8 @@ getVerifyR mail key auth bind = do
             case (realKey == key) of
                 (True) -> do
                     liftIO $ removeUnverified key auth bind
-                    setCreds False $ Creds "ldap" mail [("verifiedEmail", mail)] -- FIXME uid?
+                    setCreds False $ Creds "ldap" mail [("verifiedEmail", mail)]
+                    setSession newUserSKey mail
                     toMaster <- getRouteToMaster
                     setMessageI Msg.AddressVerified
                     redirect $ toMaster setpassR
@@ -243,16 +251,28 @@ getPasswordR = do
         Nothing -> do
             setMessageI Msg.BadSetPass
             redirect $ toMaster LoginR
+            
+    v <- lookupSession newUserSKey
     defaultLayout $ do
         setTitleI Msg.SetPassTitle
         [whamlet|
-<h3>_{Msg.Register}
+$maybe _ <- v
+    <h3>_{Msg.Register}
+$nothing
+    <h3>_{Msg.SetPassTitle}
 <form method="post" action="@{toMaster setpassR}">
     <table>
-        <tr>
-            <th>_{LdapM.Username}
-            <td>
-                <input type="text" name="username">
+        $maybe _ <- v
+            <tr>
+                <th>_{LdapM.Username}
+                <td>
+                    <input type="text" name="username">
+        $nothing
+            <tr>
+                <th>_{LdapM.OldPassword}
+                <td>
+                    <input type="password" name="old">
+            
         <tr>
             <th>_{Msg.NewPass}
             <td>
@@ -263,7 +283,10 @@ getPasswordR = do
                 <input type="password" name="confirm">
         <tr>
             <td colspan="2">
-                <input type="submit" value=_{Msg.Register}>
+                $maybe _ <- v
+                    <input type="submit" value=_{Msg.Register}>
+                $nothing
+                    <input type="submit" value=_{Msg.ConfirmPass}>
 |]
 
 
@@ -273,15 +296,11 @@ postPasswordR :: YesodAuthLdap master
               -> LdapBindConfig 
               -> GHandler Auth master ()
 postPasswordR auth bind = do
-    (username, new, confirm) <- runInputPost $ (,,)
-        <$> ireq textField "username"
-        <*> ireq textField "new"
-        <*> ireq textField "confirm"
+    newU <- lookupSession newUserSKey
+
     toMaster <- getRouteToMaster
     y <- getYesod
-    when (new /= confirm) $ do
-        setMessageI Msg.PassMismatch
-        redirect $ toMaster setpassR
+    
     maid <- maybeAuthId
     aid <- case maid of
             Nothing -> do
@@ -289,13 +308,47 @@ postPasswordR auth bind = do
                 redirect $ toMaster LoginR
             Just aid -> return aid
     
-    res <- register username new aid auth bind
-    case res of
-        RegOk -> return ()
-        -- TODO
-        e     -> do 
-                    setMessageI $ RegistrationError e username
-                    redirect $ toMaster LoginR
+    case newU of
+         (Just _) -> do
+            (username, new, confirm ) <- runInputPost $ (,,)
+                <$> ireq textField "username"
+                <*> ireq textField "new"
+                <*> ireq textField "confirm"
+                
+            when (new /= confirm) $ do
+                setMessageI Msg.PassMismatch
+                redirect $ toMaster setpassR
+            
+            res <- register username new aid auth bind
+            case res of
+                RegOk        -> return ()
+                UsernameUsed -> do
+                                setMessageI $ RegistrationError UsernameUsed username
+                                redirect $ toMaster setpassR                    
+                e            -> do
+                                setMessageI $ RegistrationError e username
+                                redirect $ toMaster LoginR
+                            
+            deleteSession newUserSKey
+         Nothing -> do
+            (old, new, confirm ) <- runInputPost $ (,,)
+                <$> ireq textField "old"
+                <*> ireq textField "new"
+                <*> ireq textField "confirm"
+                
+            when (new /= confirm) $ do
+                setMessageI Msg.PassMismatch
+                redirect $ toMaster setpassR
+                
+            res <- updatePassword aid old new auth bind
+            
+            case res of
+                 PassUpdateOk -> return ()
+                 e -> do
+                     setMessageI $ PasswordUpdateError e
+                     redirect $ loginDest y
+                 
+    
     
     setMessageI Msg.PassUpdated
     redirect $ loginDest y
