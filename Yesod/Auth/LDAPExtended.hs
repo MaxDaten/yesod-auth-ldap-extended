@@ -20,6 +20,7 @@ module Yesod.Auth.LDAPExtended
     , YesodAuthLdap (..)
     , registerR 
     , setpassR
+    , loginR
     ) where
 
 import System.Random
@@ -49,9 +50,11 @@ import qualified Yesod.Auth.Message as Msg
 import Yesod.Auth.LdapMessages as LdapM
 import Yesod.Auth.LdapMessages (LdapMessage, defaultMessage)
 
-registerR, setpassR :: AuthRoute
+registerR, setpassR, loginR, forgetR :: AuthRoute
 registerR   = PluginR "ldap" ["register"]
 setpassR    = PluginR "ldap" ["set-password"]
+loginR      = PluginR "ldap" ["login"]
+forgetR     = PluginR "ldap" ["forget-password"]
 
 verify :: Text -> Text -> AuthRoute
 verify eid verkey = PluginR "ldap" ["verify", eid, verkey]
@@ -84,7 +87,7 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
          <h1>_{Msg.LoginTitle}
 
     <div id="login">
-        <form method="post" action="@{tm login}">
+        <form method="post" action="@{tm loginR}">
             <table>
                 <tr>
                     <th>_{LdapM.Username}
@@ -95,10 +98,12 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
                     <td>
                         <input type="password" name="password" required>
                 <tr>
-                    <td>&nbsp;
-                    <td>
+                    <td colspan="2">
                         <input type="submit" value=_{Msg.LoginTitle}>
-
+            <div id=register>
+                <a href="@{tm registerR}">_{Msg.RegisterLong}
+            <div id=forget>
+                <a href="@{tm forgetR}">_{LdapM.ForgetPassword}
             <script>
                 if (!("autofocus" in document.createElement("input"))) {
                     document.getElementById("x").focus();
@@ -116,10 +121,11 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
     dispatch "GET"  ["set-password"] = getPasswordR >>= sendResponse
     dispatch "POST" ["set-password"] = postPasswordR config bindConfig >>= sendResponse
     
+    dispatch "GET"  ["forget-password"] = getForgetR >>= sendResponse
+    dispatch "POST" ["forget-password"] = postForgetR config bindConfig >>= sendResponse
+    
     dispatch _ _              = notFound
 
-login :: AuthRoute
-login = PluginR "ldap" ["login"]
 
 
 
@@ -259,7 +265,7 @@ getPasswordR = do
 $maybe _ <- v
     <h3>_{Msg.Register}
 $nothing
-    <h3>_{Msg.SetPassTitle}
+    <h3>_{LdapM.ChangePassword}
 <form method="post" action="@{toMaster setpassR}">
     <table>
         $maybe _ <- v
@@ -352,6 +358,24 @@ postPasswordR auth bind = do
     
     setMessageI Msg.PassUpdated
     redirect $ loginDest y
+    
+getForgetR :: (YesodAuthLdap master) => GHandler Auth master RepHtml 
+getForgetR = do
+    toMaster <- getRouteToMaster
+    defaultLayout $ do
+        [whamlet|
+<p>_{Msg.EnterEmail}
+<form method="post" action="@{toMaster registerR}">
+    <label for="email">_{Msg.Email}
+    <input type="email" name="email" width="150">
+    <input type="submit" value=_{LdapM.Send}>
+|]
+
+postForgetR :: YesodAuthLdap master 
+              => LdapAuthConfig 
+              -> LdapBindConfig 
+              -> GHandler Auth master ()
+postForgetR = undefined
 
 {--
     utility functions
