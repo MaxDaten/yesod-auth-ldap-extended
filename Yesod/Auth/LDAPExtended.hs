@@ -64,12 +64,14 @@ type VerKey = Text
 type VerUrl = Text
 type Pass   = Text
 
-newUserSKey :: Text
+newUserSKey, forgetSKey :: Text
 newUserSKey = "_NEWUSER"
+forgetSKey  = "_FORGET"
 
 class (YesodAuth m, RenderMessage m FormMessage) => YesodAuthLdap m where
     --type AuthLdapId m
     sendVerifyEmail :: Email -> VerKey -> VerUrl -> GHandler Auth m ()
+    sendForgetEmail :: Email -> VerKey -> VerUrl -> GHandler Auth m ()
     register        :: Email -> Pass -> AuthId m -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (LDAPRegResult)
     updatePassword  :: AuthId m -> Pass -> Pass -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (LDAPPassUpdateResult)
     
@@ -102,8 +104,6 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
                         <input type="submit" value=_{Msg.LoginTitle}>
             <div id=register>
                 <a href="@{tm registerR}">_{Msg.RegisterLong}
-            <div id=forget>
-                <a href="@{tm forgetR}">_{LdapM.ForgetPassword}
             <script>
                 if (!("autofocus" in document.createElement("input"))) {
                     document.getElementById("x").focus();
@@ -198,7 +198,7 @@ postRegisterR auth bind = do
             Just (Left _) -> do
                 toMaster <- getRouteToMaster
                 setMessageI LdapM.EmailAlreadyRegistered
-                redirect $ toMaster LoginR
+                redirect $ toMaster forgetR
             
             -- no entry existing
             Nothing -> do
@@ -227,16 +227,31 @@ getVerifyR mail key auth bind = do
     (EmailRes entry) <- liftIO $ getByEmail mail auth bind
     case entry of
          -- already verified registered
-        Just (Left _) -> return ()
+        Just (Left _) -> do
+            -- TODO registered 
+            setMessage "yep u forgot ur pw and have now a sticke key in ur entry"
+            toMaster <- getRouteToMaster
+            redirect $ toMaster LoginR
+            return ()
         Just (Right realKey) -> do
             
             case (realKey == key) of
                 (True) -> do
                     liftIO $ removeUnverified key auth bind
                     setCreds False $ Creds "ldap" mail [("verifiedEmail", mail)]
-                    setSession newUserSKey mail
+                    
+                    (EmailRes e') <- liftIO $ getByEmail mail auth bind
+                    case e' of
+                         Just (Left _) -> do
+                             liftIO $ putStrLn "here we are"
+                             return() -- TODO remove seeAlso and message
+                         
+                         Nothing -> do
+                            setSession newUserSKey mail
+                            setMessageI Msg.AddressVerified
+                            return ()
+                    
                     toMaster <- getRouteToMaster
-                    setMessageI Msg.AddressVerified
                     redirect $ toMaster setpassR
                 _ -> return ()
         _ -> return ()
@@ -250,6 +265,9 @@ getVerifyR mail key auth bind = do
 getPasswordR :: YesodAuthLdap master 
              => GHandler Auth master RepHtml
 getPasswordR = do
+    v <- lookupSession newUserSKey
+    deleteSession newUserSKey
+    
     toMaster <- getRouteToMaster
     maid <- maybeAuthId
     case maid of
@@ -258,7 +276,8 @@ getPasswordR = do
             setMessageI Msg.BadSetPass
             redirect $ toMaster LoginR
             
-    v <- lookupSession newUserSKey
+
+
     defaultLayout $ do
         setTitleI Msg.SetPassTitle
         [whamlet|
@@ -290,8 +309,10 @@ $nothing
         <tr>
             <td colspan="2">
                 $maybe _ <- v
+                    <input type="hidden" name="regstate" value="register">
                     <input type="submit" value=_{Msg.Register}>
                 $nothing
+                    <input type="hidden" name="regstate" value="changepw">
                     <input type="submit" value=_{Msg.ConfirmPass}>
 |]
 
@@ -302,8 +323,8 @@ postPasswordR :: YesodAuthLdap master
               -> LdapBindConfig 
               -> GHandler Auth master ()
 postPasswordR auth bind = do
-    newU <- lookupSession newUserSKey
-
+    regstate <- runInputPost $ ireq textField "regstate"
+                
     toMaster <- getRouteToMaster
     y <- getYesod
     
@@ -314,8 +335,8 @@ postPasswordR auth bind = do
                 redirect $ toMaster LoginR
             Just aid -> return aid
     
-    case newU of
-         (Just _) -> do
+    case regstate of
+         "register" -> do
             (username, new, confirm ) <- runInputPost $ (,,)
                 <$> ireq textField "username"
                 <*> ireq textField "new"
@@ -323,6 +344,7 @@ postPasswordR auth bind = do
                 
             when (new /= confirm) $ do
                 setMessageI Msg.PassMismatch
+                setSession newUserSKey ""
                 redirect $ toMaster setpassR
             
             res <- register username new aid auth bind
@@ -330,13 +352,15 @@ postPasswordR auth bind = do
                 RegOk        -> return ()
                 UsernameUsed -> do
                                 setMessageI $ RegistrationError UsernameUsed username
+                                setSession newUserSKey ""
                                 redirect $ toMaster setpassR                    
                 e            -> do
                                 setMessageI $ RegistrationError e username
+                                setSession newUserSKey ""
                                 redirect $ toMaster LoginR
                             
-            deleteSession newUserSKey
-         Nothing -> do
+            
+         "changepw" -> do
             (old, new, confirm ) <- runInputPost $ (,,)
                 <$> ireq textField "old"
                 <*> ireq textField "new"
@@ -364,8 +388,8 @@ getForgetR = do
     toMaster <- getRouteToMaster
     defaultLayout $ do
         [whamlet|
-<p>_{Msg.EnterEmail}
-<form method="post" action="@{toMaster registerR}">
+<p>_{LdapM.ForgetLong}
+<form method="post" action="@{toMaster forgetR}">
     <label for="email">_{Msg.Email}
     <input type="email" name="email" width="150">
     <input type="submit" value=_{LdapM.Send}>
@@ -374,8 +398,36 @@ getForgetR = do
 postForgetR :: YesodAuthLdap master 
               => LdapAuthConfig 
               -> LdapBindConfig 
-              -> GHandler Auth master ()
-postForgetR = undefined
+              -> GHandler Auth master RepHtml
+postForgetR auth bind = do
+    y <- getYesod
+    email <- runInputPost $ ireq emailField "email"
+    (EmailRes entry) <- liftIO $ getByEmail email auth bind
+    (mid, verKey) <-
+        case entry of
+            -- verification entry already existing
+            Just (Right key) -> undefined -- TODO
+            
+            -- already registered ? what to do? revalidate to set a new pw?
+            Just (Left _) -> do
+                key <- liftIO $ randomKey y
+                res <- liftIO $ addForgetKeyLDAP auth email key bind
+                -- TODO: check results
+                return (email, key)
+            
+            -- no entry existing
+            Nothing -> do
+                toMaster <- getRouteToMaster
+                setMessageI LdapM.EmailNotRegistered
+                redirect $ toMaster registerR
+                
+    render <- getUrlRender
+    tm <- getRouteToMaster
+    let verUrl = render $ tm $ verify (toPathPiece mid) verKey
+    sendForgetEmail email verKey verUrl
+    defaultLayout $ do
+        setTitleI Msg.ConfirmationEmailSentTitle
+        [whamlet| <p>_{Msg.ConfirmationEmailSent email} |]
 
 {--
     utility functions
