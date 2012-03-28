@@ -258,7 +258,7 @@ getVerifyR mail key auth bind = do
                     case re of
                         Nothing -> do
                             redirect $ toMaster setpassR
-                        Just e -> do
+                        Just _ -> do
                             redirect $ toMaster resetpassR
                 _ -> return ()
 
@@ -467,7 +467,7 @@ postForgetR auth bind = do
             -- already registered ? what to do? revalidate to set a new pw?
             Just (Left _) -> do
                 key <- liftIO $ randomKey y
-                res <- liftIO $ addForgetKeyLDAP auth email key bind
+                res <- liftIO $ addUnverifiedLDAP auth email key bind
                 -- TODO: check results
                 return (email, key)
             
