@@ -18,9 +18,12 @@
 module Yesod.Auth.LDAPExtended
     ( genericAuthLDAP 
     , YesodAuthLdap (..)
-    , registerR 
+    , registerR
     , setpassR
+    , changepassR
+    , resetpassR
     , loginR
+    , forgetR 
     ) where
 
 import System.Random
@@ -47,12 +50,14 @@ import Yesod.Content
 import Yesod.Core (PathPiece, fromPathPiece, whamlet, defaultLayout, setTitleI, toPathPiece)
 
 import qualified Yesod.Auth.Message as Msg
-import Yesod.Auth.LdapMessages as LdapM
+import qualified Yesod.Auth.LdapMessages as LdapM
 import Yesod.Auth.LdapMessages (LdapMessage, defaultMessage)
 
-registerR, setpassR, loginR, forgetR :: AuthRoute
+registerR, setpassR, changepassR, resetpassR, loginR, forgetR :: AuthRoute
 registerR   = PluginR "ldap" ["register"]
 setpassR    = PluginR "ldap" ["set-password"]
+resetpassR  = PluginR "ldap" ["reset-password"]
+changepassR = PluginR "ldap" ["change-password"]
 loginR      = PluginR "ldap" ["login"]
 forgetR     = PluginR "ldap" ["forget-password"]
 
@@ -68,12 +73,17 @@ newUserSKey, forgetSKey :: Text
 newUserSKey = "_NEWUSER"
 forgetSKey  = "_FORGET"
 
+data SetPasswordState = NewUser
+                      | ResetPassword
+                      | ChangePassword
+
 class (YesodAuth m, RenderMessage m FormMessage) => YesodAuthLdap m where
     --type AuthLdapId m
     sendVerifyEmail :: Email -> VerKey -> VerUrl -> GHandler Auth m ()
     sendForgetEmail :: Email -> VerKey -> VerUrl -> GHandler Auth m ()
     register        :: Email -> Pass -> AuthId m -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (LDAPRegResult)
-    updatePassword  :: AuthId m -> Pass -> Pass -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (LDAPPassUpdateResult)
+    updatePassword  :: AuthId m -> Pass -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (LDAPPassUpdateResult)
+    login :: AuthId m -> Pass -> LdapAuthConfig -> LdapBindConfig -> GHandler Auth m (Bool)
     
     renderLdapMessage :: m -> [Text] -> LdapMessage -> Text
     renderLdapMessage _ _ = LdapM.defaultMessage
@@ -104,6 +114,8 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
                         <input type="submit" value=_{Msg.LoginTitle}>
             <div id=register>
                 <a href="@{tm registerR}">_{Msg.RegisterLong}
+            <div id=forget>
+                <a href="@{tm forgetR}">_{LdapM.ForgetPassword}
             <script>
                 if (!("autofocus" in document.createElement("input"))) {
                     document.getElementById("x").focus();
@@ -118,8 +130,14 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
             Nothing -> notFound
             Just eid' -> getVerifyR eid' verkey config bindConfig >>= sendResponse
     
-    dispatch "GET"  ["set-password"] = getPasswordR >>= sendResponse
-    dispatch "POST" ["set-password"] = postPasswordR config bindConfig >>= sendResponse
+    dispatch "GET"  ["set-password"] = getPasswordR NewUser >>= sendResponse
+    dispatch "POST" ["set-password"] = postPasswordR NewUser config bindConfig >>= sendResponse
+    
+    dispatch "GET"  ["change-password"] = getPasswordR ChangePassword >>= sendResponse
+    dispatch "POST" ["change-password"] = postPasswordR ChangePassword config bindConfig >>= sendResponse
+    
+    dispatch "GET"  ["reset-password"] = getPasswordR ResetPassword >>= sendResponse
+    dispatch "POST" ["reset-password"] = postPasswordR ResetPassword config bindConfig >>= sendResponse
     
     dispatch "GET"  ["forget-password"] = getForgetR >>= sendResponse
     dispatch "POST" ["forget-password"] = postForgetR config bindConfig >>= sendResponse
@@ -224,37 +242,26 @@ getVerifyR :: YesodAuthLdap master
            -> LdapBindConfig 
            -> GHandler Auth master RepHtml
 getVerifyR mail key auth bind = do
-    (EmailRes entry) <- liftIO $ getByEmail mail auth bind
-    case entry of
-         -- already verified registered
-        Just (Left _) -> do
-            -- TODO registered 
-            setMessage "yep u forgot ur pw and have now a sticke key in ur entry"
-            toMaster <- getRouteToMaster
-            redirect $ toMaster LoginR
-            return ()
-        Just (Right realKey) -> do
-            
+    mkey <- liftIO $ getEmailVKey mail auth bind
+    case mkey of
+        Nothing -> return ()
+        Just realKey -> do
             case (realKey == key) of
                 (True) -> do
                     liftIO $ removeUnverified key auth bind
                     setCreds False $ Creds "ldap" mail [("verifiedEmail", mail)]
                     
-                    (EmailRes e') <- liftIO $ getByEmail mail auth bind
-                    case e' of
-                         Just (Left _) -> do
-                             liftIO $ putStrLn "here we are"
-                             return() -- TODO remove seeAlso and message
-                         
-                         Nothing -> do
-                            setSession newUserSKey mail
-                            setMessageI Msg.AddressVerified
-                            return ()
+                    re <- liftIO $ getRegistered mail auth bind
                     
+                    setMessageI Msg.AddressVerified
                     toMaster <- getRouteToMaster
-                    redirect $ toMaster setpassR
+                    case re of
+                        Nothing -> do
+                            redirect $ toMaster setpassR
+                        Just e -> do
+                            redirect $ toMaster resetpassR
                 _ -> return ()
-        _ -> return ()
+
         
     defaultLayout $ do
         setTitleI Msg.InvalidKey
@@ -263,8 +270,9 @@ getVerifyR mail key auth bind = do
 
 
 getPasswordR :: YesodAuthLdap master 
-             => GHandler Auth master RepHtml
-getPasswordR = do
+             => SetPasswordState
+             -> GHandler Auth master RepHtml
+getPasswordR state = do
     v <- lookupSession newUserSKey
     deleteSession newUserSKey
     
@@ -281,49 +289,75 @@ getPasswordR = do
     defaultLayout $ do
         setTitleI Msg.SetPassTitle
         [whamlet|
-$maybe _ <- v
-    <h3>_{Msg.Register}
-$nothing
-    <h3>_{LdapM.ChangePassword}
-<form method="post" action="@{toMaster setpassR}">
-    <table>
-        $maybe _ <- v
-            <tr>
-                <th>_{LdapM.Username}
-                <td>
-                    <input type="text" name="username">
-        $nothing
-            <tr>
-                <th>_{LdapM.OldPassword}
-                <td>
-                    <input type="password" name="old">
-            
-        <tr>
-            <th>_{Msg.NewPass}
-            <td>
-                <input type="password" name="new">
-        <tr>
-            <th>_{Msg.ConfirmPass}
-            <td>
-                <input type="password" name="confirm">
-        <tr>
-            <td colspan="2">
-                $maybe _ <- v
-                    <input type="hidden" name="regstate" value="register">
-                    <input type="submit" value=_{Msg.Register}>
-                $nothing
-                    <input type="hidden" name="regstate" value="changepw">
-                    <input type="submit" value=_{Msg.ConfirmPass}>
+$case state
+    $of NewUser
+        <h3>_{Msg.Register}
+        <form method="post" action="@{toMaster setpassR}">
+            <table>
+                <tr>
+                    <th>_{LdapM.Username}
+                    <td>
+                        <input type="text" name="username">
+                <tr>
+                    <th>_{Msg.NewPass}
+                    <td>
+                            <input type="password" name="new">
+                <tr>
+                    <th>_{Msg.ConfirmPass}
+                    <td>
+                        <input type="password" name="confirm">
+                <tr>
+                    <td colspan="2">
+                            <input type="hidden" name="regstate" value=state>
+                            <input type="submit" value=_{Msg.Register}>
+    $of ChangePassword
+        <h3>_{LdapM.ChangePassword}
+        <form method="post" action="@{toMaster changepassR}">
+            <table>
+                <tr>
+                    <th>_{LdapM.OldPassword}
+                    <td>
+                        <input type="password" name="old">
+                <tr>
+                    <th>_{Msg.NewPass}
+                    <td>
+                            <input type="password" name="new">
+                <tr>
+                    <th>_{Msg.ConfirmPass}
+                    <td>
+                        <input type="password" name="confirm">
+                <tr>
+                    <td colspan="2">
+                            <input type="hidden" name="regstate" value=state>
+                            <input type="submit" value=_{Msg.Register}>
+    $of ResetPassword
+        <h3>_{LdapM.ChangePassword}
+        <form method="post" action="@{toMaster resetpassR}">
+            <table>
+                <tr>
+                    <th>_{Msg.NewPass}
+                    <td>
+                            <input type="password" name="new">
+                <tr>
+                    <th>_{Msg.ConfirmPass}
+                    <td>
+                        <input type="password" name="confirm">
+                <tr>
+                    <td colspan="2">
+                            <input type="hidden" name="regstate" value=state>
+                            <input type="submit" value=_{Msg.Register}>
 |]
 
 
 
 postPasswordR :: YesodAuthLdap master 
-              => LdapAuthConfig 
+              => SetPasswordState
+              -> LdapAuthConfig 
               -> LdapBindConfig 
               -> GHandler Auth master ()
-postPasswordR auth bind = do
-    regstate <- runInputPost $ ireq textField "regstate"
+postPasswordR regstate auth bind = do
+
+    
                 
     toMaster <- getRouteToMaster
     y <- getYesod
@@ -336,7 +370,7 @@ postPasswordR auth bind = do
             Just aid -> return aid
     
     case regstate of
-         "register" -> do
+        NewUser -> do
             (username, new, confirm ) <- runInputPost $ (,,)
                 <$> ireq textField "username"
                 <*> ireq textField "new"
@@ -351,16 +385,16 @@ postPasswordR auth bind = do
             case res of
                 RegOk        -> return ()
                 UsernameUsed -> do
-                                setMessageI $ RegistrationError UsernameUsed username
+                                setMessageI $ LdapM.RegistrationError UsernameUsed username
                                 setSession newUserSKey ""
                                 redirect $ toMaster setpassR                    
                 e            -> do
-                                setMessageI $ RegistrationError e username
+                                setMessageI $ LdapM.RegistrationError e username
                                 setSession newUserSKey ""
                                 redirect $ toMaster LoginR
                             
             
-         "changepw" -> do
+        ChangePassword -> do
             (old, new, confirm ) <- runInputPost $ (,,)
                 <$> ireq textField "old"
                 <*> ireq textField "new"
@@ -368,18 +402,40 @@ postPasswordR auth bind = do
                 
             when (new /= confirm) $ do
                 setMessageI Msg.PassMismatch
-                redirect $ toMaster setpassR
+                redirect $ toMaster changepassR
+            
+            -- TODO check old password
+            ok <- login aid old auth bind
+            
+            when (not ok)  $ do
+                setMessageI LdapM.WrongOldPassword
+                setSession newUserSKey ""
+                redirect $ toMaster changepassR
                 
-            res <- updatePassword aid old new auth bind
+            res <- updatePassword aid new auth bind
             
             case res of
                  PassUpdateOk -> return ()
                  e -> do
-                     setMessageI $ PasswordUpdateError e
-                     redirect $ loginDest y
-                 
-    
-    
+                     setMessageI $ LdapM.PasswordUpdateError e
+                     redirect $ loginDest y -- TODO: where to go
+        ResetPassword -> do
+            (new, confirm) <- runInputPost $ (,)
+                <$> ireq textField "new"
+                <*> ireq textField "confirm"
+                
+            when (new /= confirm) $ do
+                setMessageI Msg.PassMismatch
+                redirect $ toMaster resetpassR
+            
+            res <- updatePassword aid new auth bind
+            case res of
+                 PassUpdateOk -> return ()
+                 e -> do
+                     setMessageI $ LdapM.PasswordUpdateError e
+                     redirect $ loginDest y -- TODO where to go?
+            
+
     setMessageI Msg.PassUpdated
     redirect $ loginDest y
     
@@ -406,7 +462,7 @@ postForgetR auth bind = do
     (mid, verKey) <-
         case entry of
             -- verification entry already existing
-            Just (Right key) -> undefined -- TODO
+            Just (Right key) -> return (email, key) -- TODO
             
             -- already registered ? what to do? revalidate to set a new pw?
             Just (Left _) -> do

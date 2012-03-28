@@ -13,6 +13,7 @@ data LdapMessage = EmailAlreadyRegistered
                  | EmailNotRegistered
                  | Username
                  | OldPassword
+                 | WrongOldPassword
                  | ChangePassword
                  | ForgetPassword
                  | Send
@@ -29,11 +30,13 @@ englishMessage EmailAlreadyRegistered = "This e-mail address is already register
 englishMessage EmailNotRegistered = "This e-mail is not registered"
 englishMessage Username = "Username"
 englishMessage OldPassword = "Old Password"
+englishMessage WrongOldPassword = "The old Password is wrong."
 englishMessage ChangePassword = "Change Password"
 englishMessage ForgetPassword = "Forget Password"
 englishMessage Send           = "Send"
 englishMessage ForgetLong     = "If you've forgotten your Password, you can enter your e-mail address, an we will send you an activation link, so you can set an new password"
 englishMessage (PasswordUpdateError (UnexpectedPassUpdateError e)) = "An unexpected error occured. Please try again or send us a e-mail" `mappend` (pack $ show e)
+englishMessage (PasswordUpdateError _) = undefined  -- TDOD rethink errorhandling
 
 
 
@@ -42,6 +45,7 @@ germanMessage EmailAlreadyRegistered = "Diese E-Mail Adresse ist bereits registr
 germanMessage EmailNotRegistered  = "Diese E-Mail Adresse ist bei uns nicht registriert"
 germanMessage Username = "Benutzername"
 germanMessage OldPassword = "Altes Passwort"
+germanMessage WrongOldPassword = "Das alte Passwort ist falsch."
 germanMessage ChangePassword = "Passwort ändern"
 germanMessage ForgetPassword = "Passwort vergessen"
 germanMessage Send           = "Abschicken"
@@ -53,3 +57,4 @@ germanMessage (RegistrationError e text) =
     " : " `mappend` text
 
 germanMessage (PasswordUpdateError (UnexpectedPassUpdateError e)) = "Es ist ein unerwarteter Fehler aufgetreten, bitte versuche es noch einmal oder schreibe uns: " `mappend` (pack $ show e)
+germanMessage (PasswordUpdateError _) = undefined -- TDOD rethink errorhandling
