@@ -110,14 +110,14 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
             Nothing -> notFound
             Just eid' -> getVerifyR eid' verkey config bindConfig >>= sendResponse
     
-    dispatch "GET"  ["set-password"] = getPasswordR NewUser >>= sendResponse
-    dispatch "POST" ["set-password"] = postPasswordR NewUser config bindConfig >>= sendResponse
+    dispatch "GET"  ["set-password"] = getNewUserR >>= sendResponse
+    dispatch "POST" ["set-password"] = postNewUserR config bindConfig >>= sendResponse
     
-    dispatch "GET"  ["change-password"] = getPasswordR ChangePassword >>= sendResponse
-    dispatch "POST" ["change-password"] = postPasswordR ChangePassword config bindConfig >>= sendResponse
+    dispatch "GET"  ["change-password"] = getChangePassR >>= sendResponse
+    dispatch "POST" ["change-password"] = postChangePassR config bindConfig >>= sendResponse
     
-    dispatch "GET"  ["reset-password"] = getPasswordR ResetPassword >>= sendResponse
-    dispatch "POST" ["reset-password"] = postPasswordR ResetPassword config bindConfig >>= sendResponse
+    dispatch "GET"  ["reset-password"] = getResetPassR >>= sendResponse
+    dispatch "POST" ["reset-password"] = postResetPassR config bindConfig >>= sendResponse
     
     dispatch "GET"  ["forget-password"] = getForgetR >>= sendResponse
     dispatch "POST" ["forget-password"] = postForgetR config bindConfig >>= sendResponse
