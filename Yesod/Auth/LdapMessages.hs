@@ -17,6 +17,8 @@ data LdapMessage = EmailAlreadyRegistered
                  | ChangePassword
                  | ForgetPassword
                  | Send
+                 | EnterEmailLong
+                 | LoginError LDAPAuthResult
                  | ForgetLong
                  | RegistrationError LDAPRegResult Text
                  | PasswordUpdateError LDAPPassUpdateResult
@@ -34,9 +36,12 @@ englishMessage WrongOldPassword = "The old Password is wrong."
 englishMessage ChangePassword = "Change Password"
 englishMessage ForgetPassword = "Forget Password"
 englishMessage Send           = "Send"
-englishMessage ForgetLong     = "If you've forgotten your Password, you can enter your e-mail address, an we will send you an activation link, so you can set an new password"
+englishMessage ForgetLong     = "If you've forgotten your password, you can enter your e-mail address, an we will send you an activation link, so you can set an new password"
 englishMessage (PasswordUpdateError (UnexpectedPassUpdateError e)) = "An unexpected error occured. Please try again or send us a e-mail" `mappend` (pack $ show e)
 englishMessage (PasswordUpdateError _) = undefined  -- TDOD rethink errorhandling
+englishMessage (LoginError InitialBindFail) = "Unexpected error during login."
+englishMessage (LoginError _) = "User not found or wrong password."
+englishMessage EnterEmailLong = "Enter your e-mail address to star the registration."
 
 
 
@@ -58,3 +63,6 @@ germanMessage (RegistrationError e text) =
 
 germanMessage (PasswordUpdateError (UnexpectedPassUpdateError e)) = "Es ist ein unerwarteter Fehler aufgetreten, bitte versuche es noch einmal oder schreibe uns: " `mappend` (pack $ show e)
 germanMessage (PasswordUpdateError _) = undefined -- TDOD rethink errorhandling
+germanMessage (LoginError InitialBindFail) = "Unerwarteter Fehler aufgetreten."
+germanMessage (LoginError _) = "Falsches Passwort oder Benutzer nicht gefunden."
+germanMessage EnterEmailLong = "Um dich zu Registrieren musst zu zunächst deine E-Mail Adresse eingeben. Du erhälst dann eine E-Mail mit einem Link, über den du dann bestätigen kannst, dass die Adresse dir gehört. Danach kannst du einen Benutzernamen und ein Passwort wählen."

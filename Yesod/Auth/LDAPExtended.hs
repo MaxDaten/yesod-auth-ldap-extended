@@ -181,7 +181,10 @@ postLoginR config bindConfig = do
                        , credsExtra  = []
                        }
                  setCreds True creds
-            ldapError -> errorMessage (TS.pack $ show ldapError)
+            err -> do
+                setMessageI $ LdapM.LoginError err
+                toMaster <- getRouteToMaster
+                redirect $ toMaster LoginR
 
 
 
@@ -190,10 +193,10 @@ getRegisterR = do
     toMaster <- getRouteToMaster
     defaultLayout $ do
         [whamlet|
-<p>_{Msg.EnterEmail}
+<p>_{LdapM.EnterEmailLong}
 <form method="post" action="@{toMaster registerR}">
     <label for="email">_{Msg.Email}
-    <input type="email" name="email" width="150">
+    <input type="email" name="email" width="150" required>
     <input type="submit" value=_{Msg.Register}>
 |]
 
@@ -297,18 +300,17 @@ $case state
                 <tr>
                     <th>_{LdapM.Username}
                     <td>
-                        <input type="text" name="username">
+                        <input type="text" name="username" required>
                 <tr>
                     <th>_{Msg.NewPass}
                     <td>
-                            <input type="password" name="new">
+                            <input type="password" name="new" required>
                 <tr>
                     <th>_{Msg.ConfirmPass}
                     <td>
-                        <input type="password" name="confirm">
+                        <input type="password" name="confirm" required>
                 <tr>
                     <td colspan="2">
-                            <input type="hidden" name="regstate" value=state>
                             <input type="submit" value=_{Msg.Register}>
     $of ChangePassword
         <h3>_{LdapM.ChangePassword}
@@ -317,19 +319,18 @@ $case state
                 <tr>
                     <th>_{LdapM.OldPassword}
                     <td>
-                        <input type="password" name="old">
+                        <input type="password" name="old" required>
                 <tr>
                     <th>_{Msg.NewPass}
                     <td>
-                            <input type="password" name="new">
+                            <input type="password" name="new" required>
                 <tr>
                     <th>_{Msg.ConfirmPass}
                     <td>
-                        <input type="password" name="confirm">
+                        <input type="password" name="confirm" required>
                 <tr>
                     <td colspan="2">
-                            <input type="hidden" name="regstate" value=state>
-                            <input type="submit" value=_{Msg.Register}>
+                            <input type="submit" value=_{Msg.ConfirmPass}>
     $of ResetPassword
         <h3>_{LdapM.ChangePassword}
         <form method="post" action="@{toMaster resetpassR}">
@@ -337,15 +338,14 @@ $case state
                 <tr>
                     <th>_{Msg.NewPass}
                     <td>
-                            <input type="password" name="new">
+                            <input type="password" name="new" required>
                 <tr>
                     <th>_{Msg.ConfirmPass}
                     <td>
-                        <input type="password" name="confirm">
+                        <input type="password" name="confirm" required>
                 <tr>
                     <td colspan="2">
-                            <input type="hidden" name="regstate" value=state>
-                            <input type="submit" value=_{Msg.Register}>
+                            <input type="submit" value=_{Msg.ConfirmPass}>
 |]
 
 
@@ -488,6 +488,22 @@ postForgetR auth bind = do
 {--
     utility functions
 --}
+
+passwordConfirmField :: Field sub master Text
+passwordConfirmField = Field
+    { fieldParse = \rawVals ->
+        case rawVals of
+            [a, b]
+                | a == b -> return $ Right $ Just a
+                | otherwise -> return $ Left "Passwords don't match"
+            [] -> return $ Right Nothing
+            _ -> return $ Left "You must enter two values"
+    , fieldView = \idAttr nameAttr _ eResult isReq -> [whamlet|
+<input id=#{idAttr} name=#{nameAttr} type=password>
+<div>Confirm:
+<input id=#{idAttr}-confirm name=#{nameAttr} type=password>
+|]
+    }
 
 -- | Generate a random alphanumeric string.
 randomKey :: m -> IO Text
