@@ -31,12 +31,11 @@ import qualified Yesod.Auth.LdapMessages as LdapM
 import Yesod.Auth.LdapMessages (LdapMessage, defaultMessage)
 
 import Control.Monad (when)  
-import Control.Monad.IO.Class (liftIO)
 
 import Yesod.Form
 import Yesod.Handler
 import Yesod.Content
-import Yesod.Core (PathPiece, fromPathPiece, whamlet, defaultLayout, setTitleI, toPathPiece)
+import Yesod.Core (whamlet, defaultLayout, setTitleI)
 
 import Web.Authenticate.LDAP
 import LDAP
@@ -50,7 +49,9 @@ resetpassR  = PluginR "ldap" ["reset-password"]
 changepassR = PluginR "ldap" ["change-password"]
 
 
-    
+
+
+
 getResetPassR :: YesodAuthLdap master 
                => GHandler Auth master RepHtml
 getResetPassR = do
@@ -76,7 +77,9 @@ getResetPassR = do
                             <td colspan="2">
                                     <input type="submit" value=_{Msg.ConfirmPass}>
         |]
-    
+
+
+
 
 postResetPassR :: YesodAuthLdap master 
               => LdapAuthConfig 
@@ -106,8 +109,9 @@ postResetPassR auth bind = do
 
     setMessageI Msg.PassUpdated
     redirect $ loginDest y
-    
-    
+
+
+
 getNewUserR :: YesodAuthLdap master 
                => GHandler Auth master RepHtml
 getNewUserR = do
@@ -137,6 +141,8 @@ getNewUserR = do
                         <td colspan="2">
                                 <input type="submit" value=_{Msg.Register}>
         |]
+
+
 
 
 postNewUserR :: YesodAuthLdap master 
@@ -173,6 +179,7 @@ postNewUserR auth bind =
 
 
 
+
 getChangePassR :: YesodAuthLdap master 
                => GHandler Auth master RepHtml
 getChangePassR = do
@@ -201,6 +208,7 @@ getChangePassR = do
                         <td colspan="2">
                                 <input type="submit" value=_{Msg.ConfirmPass}>
         |]
+
 
 
 
@@ -243,7 +251,8 @@ postChangePassR auth bind =
         redirect $ loginDest y
 
 
- 
+
+
 postHandleAuth :: YesodAuthLdap master 
               => GHandler Auth master (AuthId master)
 postHandleAuth = do
@@ -258,6 +267,7 @@ postHandleAuth = do
 
 
 
+
 getHandleAuth :: YesodAuthLdap master 
            => GHandler Auth master ()
 getHandleAuth = do
@@ -268,6 +278,8 @@ getHandleAuth = do
         Nothing -> do
             setMessageI Msg.BadSetPass
             redirect $ toMaster LoginR
+
+
 
 
 passwordConfirmField :: Field sub master Text
