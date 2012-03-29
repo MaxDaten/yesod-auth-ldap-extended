@@ -34,8 +34,10 @@ library
                    , random                  >= 1.0.0.3   && < 1.1
                    , mime-mail               >= 0.3       && < 0.5
 
-    exposed-modules: Yesod.Auth.LDAPExtended
+    exposed-modules: Yesod.Auth.Ldap.YesodAuthLdap
+                     Yesod.Auth.LDAPExtended
                      Yesod.Auth.LdapMessages
+    other-modules:   Yesod.Auth.Ldap.Handler.Password
 
     ghc-options:     -Wall
 
