@@ -1,5 +1,4 @@
 {-# LANGUAGE QuasiQuotes #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -21,9 +20,11 @@ module Yesod.Auth.Ldap.Handler.Password
     , getResetPassR
     ) where
 
+--import Yesod
 import Yesod.Auth
 import Control.Applicative
 import Data.Text (Text)
+import qualified Data.Text as TS
 
 import Yesod.Message (RenderMessage (..))
 import qualified Yesod.Auth.Message as Msg
@@ -32,10 +33,14 @@ import Yesod.Auth.LdapMessages (LdapMessage, defaultMessage)
 
 import Control.Monad (when)  
 
+import Text.Blaze (Html, toHtml)
+
 import Yesod.Form
 import Yesod.Handler
+import Yesod.Widget
 import Yesod.Content
 import Yesod.Core (whamlet, defaultLayout, setTitleI)
+import Control.Monad.IO.Class (liftIO)
 
 import Web.Authenticate.LDAP
 import LDAP
@@ -50,6 +55,11 @@ changepassR = PluginR "ldap" ["change-password"]
 
 
 
+data Cr = Cr
+    { crUsername :: Text
+    , crPassword :: Text
+    }
+    deriving (Show)
 
 
 getResetPassR :: YesodAuthLdap master 
@@ -59,23 +69,15 @@ getResetPassR = do
     
     toMaster <- getRouteToMaster
     
+    ((res, widget), enctype) <- runFormPost resetPassForm
+    
     defaultLayout $ do
         setTitleI Msg.SetPassTitle
         [whamlet|
             <h3>_{LdapM.ChangePassword}
-                <form method="post" action="@{toMaster resetpassR}">
-                    <table>
-                        <tr>
-                            <th>_{Msg.NewPass}
-                            <td>
-                                    <input type="password" name="new" required>
-                        <tr>
-                            <th>_{Msg.ConfirmPass}
-                            <td>
-                                <input type="password" name="confirm" required>
-                        <tr>
-                            <td colspan="2">
-                                    <input type="submit" value=_{Msg.ConfirmPass}>
+            <form method="post" action="@{toMaster resetpassR}">
+                ^{widget}
+                <input type="submit" value=_{Msg.ConfirmPass}>
         |]
 
 
@@ -91,15 +93,18 @@ postResetPassR auth bind = do
     toMaster <- getRouteToMaster
     y <- getYesod
     
-    (new, confirm) <- runInputPost $ (,)
-        <$> ireq textField "new"
-        <*> ireq textField "confirm"
-        
-    when (new /= confirm) $ do
-        setMessageI Msg.PassMismatch
-        redirect $ toMaster resetpassR
     
-    res <- updatePassword aid new auth bind
+    ((res, widget), enctype) <- runFormPost resetPassForm
+    pass <- case res of
+        FormSuccess e -> return e
+        FormFailure [e] -> do 
+                setMessage $ toHtml e
+                redirect $ toMaster resetpassR
+        _ -> do
+                setMessage $ toHtml ("Unbekannter Fehler" :: Text)
+                redirect $ loginDest y
+    
+    res <- updatePassword aid pass auth bind
     case res of
             PassUpdateOk -> return ()
             e -> do
@@ -119,36 +124,23 @@ getNewUserR = do
     
     toMaster <- getRouteToMaster
     
+    ((res, widget), enctype) <- runFormPost $  newUserForm
+    
     defaultLayout $ do
         setTitleI Msg.SetPassTitle
         [whamlet|
             <h3>_{Msg.Register}
             <form method="post" action="@{toMaster setpassR}">
-                <table>
-                    <tr>
-                        <th>_{LdapM.Username}
-                        <td>
-                            <input type="text" name="username" required>
-                    <tr>
-                        <th>_{Msg.NewPass}
-                        <td>
-                                <input type="password" name="new" required>
-                    <tr>
-                        <th>_{Msg.ConfirmPass}
-                        <td>
-                            <input type="password" name="confirm" required>
-                    <tr>
-                        <td colspan="2">
-                                <input type="submit" value=_{Msg.Register}>
+                ^{widget}
+                <input type="submit" value=_{Msg.Register}>
         |]
-
 
 
 
 postNewUserR :: YesodAuthLdap master 
               => LdapAuthConfig 
               -> LdapBindConfig 
-              -> GHandler Auth master ()
+              -> GHandler Auth master (RepHtml)
 postNewUserR auth bind = 
     do
         aid <- postHandleAuth
@@ -156,26 +148,30 @@ postNewUserR auth bind =
         toMaster <- getRouteToMaster
         y <- getYesod
         
-        (username, new, confirm ) <- runInputPost $ (,,)
-            <$> ireq textField "username"
-            <*> ireq textField "new"
-            <*> ireq textField "confirm"
-            
-        when (new /= confirm) $ do
-            setMessageI Msg.PassMismatch
-            redirect $ toMaster setpassR
         
-        res <- register username new aid auth bind
+        
+        ((res, widget), enctype) <- runFormPost newUserForm
+        cr <- case res of
+            FormSuccess e -> return e
+            FormFailure [e] -> do 
+                setMessage $ toHtml e
+                redirect $ toMaster setpassR
+            _ -> do
+                setMessage $ toHtml ("Unbekannter Fehler" :: Text)
+                redirect $ loginDest y
+        
+        res <- register (crUsername cr) (crPassword cr) aid auth bind
         case res of
             RegOk        -> return ()
             UsernameUsed -> do
-                            setMessageI $ LdapM.RegistrationError UsernameUsed username
+                            setMessageI $ LdapM.RegistrationError UsernameUsed (crUsername cr)
                             redirect $ toMaster setpassR                    
             e            -> do
-                            setMessageI $ LdapM.RegistrationError e username
+                            setMessageI $ LdapM.RegistrationError e (crUsername cr)
                             redirect $ toMaster LoginR
         setMessageI Msg.PassUpdated
         redirect $ loginDest y
+
 
 
 
@@ -186,27 +182,16 @@ getChangePassR = do
     getHandleAuth
     
     toMaster <- getRouteToMaster
+    
+    ((res, widget), enctype) <- runFormPost changePassForm
+    
     defaultLayout $ do
         setTitleI Msg.SetPassTitle
         [whamlet|
             <h3>_{LdapM.ChangePassword}
             <form method="post" action="@{toMaster changepassR}">
-                <table>
-                    <tr>
-                        <th>_{LdapM.OldPassword}
-                        <td>
-                            <input type="password" name="old" required>
-                    <tr>
-                        <th>_{Msg.NewPass}
-                        <td>
-                                <input type="password" name="new" required>
-                    <tr>
-                        <th>_{Msg.ConfirmPass}
-                        <td>
-                            <input type="password" name="confirm" required>
-                    <tr>
-                        <td colspan="2">
-                                <input type="submit" value=_{Msg.ConfirmPass}>
+                ^{widget}
+                <input type="submit" value=_{Msg.ConfirmPass}>
         |]
 
 
@@ -222,17 +207,17 @@ postChangePassR auth bind =
         
         toMaster <- getRouteToMaster
         y <- getYesod
-
-        (old, new, confirm ) <- runInputPost $ (,,)
-            <$> ireq textField "old"
-            <*> ireq textField "new"
-            <*> ireq textField "confirm"
-            
-        when (new /= confirm) $ do
-            setMessageI Msg.PassMismatch
-            redirect $ toMaster changepassR
         
-        -- TODO check old password
+        ((res, widget), enctype) <- runFormPost changePassForm
+        (old,new) <- case res of
+            FormSuccess e -> return e
+            FormFailure [e] -> do 
+                setMessage $ toHtml e
+                redirect $ toMaster changepassR
+            _ -> do
+                setMessage $ toHtml ("Unbekannter Fehler" :: Text)
+                redirect $ loginDest y
+                
         ok <- login aid old auth bind
         
         when (not ok)  $ do
@@ -282,18 +267,58 @@ getHandleAuth = do
 
 
 
-passwordConfirmField :: Field sub master Text
-passwordConfirmField = Field
+newUserForm :: YesodAuthLdap m
+            => Html -> MForm sub m (FormResult Cr, GWidget sub m ())
+newUserForm = renderTable $ Cr
+        <$> areq textField (fs LdapM.Username) Nothing
+        <*> areq newPasswordFields ("") Nothing
+    where 
+        fs msg = FieldSettings
+            { fsLabel = msg
+            , fsTooltip = Nothing
+            , fsId = Nothing
+            , fsName = Nothing
+            , fsClass = []
+            }
+
+resetPassForm :: YesodAuthLdap m
+            => Html -> MForm sub m (FormResult Text, GWidget sub m ())
+resetPassForm = renderTable $ areq newPasswordFields ("") Nothing
+
+  
+changePassForm :: YesodAuthLdap m
+            => Html -> MForm sub m (FormResult (Text, Text), GWidget sub m ())
+changePassForm = renderTable $ (,)
+        <$> areq passwordField (fs LdapM.OldPassword) Nothing
+        <*> areq newPasswordFields ("") Nothing
+    where 
+        fs msg = FieldSettings
+            { fsLabel = msg
+            , fsTooltip = Nothing
+            , fsId = Nothing
+            , fsName = Nothing
+            , fsClass = []
+            }
+        
+newPasswordFields :: YesodAuthLdap master
+                     => Field sub master Text
+newPasswordFields = Field
     { fieldParse = \rawVals ->
         case rawVals of
             [a, b]
-                | a == b -> return $ Right $ Just a
-                | otherwise -> return $ Left "Passwords don't match"
+                | a == b -> checkPass a
+                | otherwise -> return $ Left "Passwörter stimmen nicht überein" 
             [] -> return $ Right Nothing
-            _ -> return $ Left "You must enter two values"
+            _ -> return $ Left $ "Fehler"
     , fieldView = \idAttr nameAttr _ eResult isReq -> [whamlet|
-<input id=#{idAttr} name=#{nameAttr} type=password>
-<div>Confirm:
-<input id=#{idAttr}-confirm name=#{nameAttr} type=password>
+    Das Passwort muss aus mindestens 6 Zeichen bestehen
+<div>
+    _{Msg.NewPass}
+    <input id=#{idAttr} name=#{nameAttr} type=password required>
+<div>
+    _{Msg.ConfirmPass}
+    <input id=#{idAttr}-confirm name=#{nameAttr} type=password required>
 |]
     }
+    where checkPass a   | TS.length a < 6 = return $ Left "Das Passwort muss mindestens 6 Zeichen lang sein."
+                        | otherwise       = return $ Right $ Just a

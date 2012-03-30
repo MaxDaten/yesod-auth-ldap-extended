@@ -18,6 +18,7 @@ module Yesod.Auth.Ldap.YesodAuthLdap
 import Yesod.Auth
 import Yesod.Message (RenderMessage (..))
 
+
 import Yesod.Form
 import Yesod.Handler
 
@@ -31,6 +32,7 @@ import Web.Authenticate.LDAP
     )
 import Yesod.Auth.LdapMessages (LdapMessage)
 import qualified Yesod.Auth.LdapMessages as LdapM
+import Yesod.Auth.Message (AuthMessage)
 
 type Email  = Text
 type VerKey = Text

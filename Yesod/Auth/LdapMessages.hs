@@ -21,8 +21,9 @@ data LdapMessage = EmailAlreadyRegistered
                  | LoginError LDAPAuthResult
                  | ForgetLong
                  | RegistrationError LDAPRegResult Text
+                 | ValidationPassMismatch
+                 | ValidationNotAEmail
                  | PasswordUpdateError LDAPPassUpdateResult
-
 
 defaultMessage :: LdapMessage -> Text
 defaultMessage = englishMessage
