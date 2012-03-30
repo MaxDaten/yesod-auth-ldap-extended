@@ -182,7 +182,7 @@ getRegisterR = do
         [whamlet|
 <p>_{LdapM.EnterEmailLong}
 <div id=disclaimer>
-<p>Mit der Übermittlung deiner E-Mail Adresse stimmst du unseren <a href="@{toMaster termsOfServiceR}">Nutzungsbedingungen</a> und unserer <a href="@{toMaster privacyPolicyR}">Datenschutzbestimmungen</a> zu
+<p>Mit der Übermittlung deiner E-Mail Adresse stimmst du unseren <a href="@{toMaster termsOfServiceR}">Nutzungsbedingungen</a> und unseren <a href="@{toMaster privacyPolicyR}">Datenschutzbestimmungen</a> zu
 <form method="post" action="@{toMaster registerR}">
     <label for="email">_{Msg.Email}
     <input type="email" name="email" width="150" required>
