@@ -269,7 +269,7 @@ getHandleAuth = do
 
 newUserForm :: YesodAuthLdap m
             => Html -> MForm sub m (FormResult Cr, GWidget sub m ())
-newUserForm = renderDivs $ Cr
+newUserForm = renderTable $ Cr
         <$> areq textField (fs LdapM.Username) Nothing
         <*> areq newPasswordFields ("") Nothing
     where 
@@ -283,12 +283,12 @@ newUserForm = renderDivs $ Cr
 
 resetPassForm :: YesodAuthLdap m
             => Html -> MForm sub m (FormResult Text, GWidget sub m ())
-resetPassForm = renderDivs $ areq newPasswordFields ("") Nothing
+resetPassForm = renderTable $ areq newPasswordFields ("") Nothing
 
   
 changePassForm :: YesodAuthLdap m
             => Html -> MForm sub m (FormResult (Text, Text), GWidget sub m ())
-changePassForm = renderDivs $ (,)
+changePassForm = renderTable $ (,)
         <$> areq passwordField (fs LdapM.OldPassword) Nothing
         <*> areq newPasswordFields ("") Nothing
     where 
@@ -312,13 +312,13 @@ newPasswordFields = Field
             _ -> return $ Left $ "Fehler"
     , fieldView = \idAttr nameAttr _ eResult isReq -> [whamlet|
         <div id=newPass>
-            <div>
+            <div id=pass-length-hint>
                 Das Passwort muss aus mindestens 6 Zeichen bestehen
             <div>
-                _{Msg.NewPass}
+                <label for=#{idAttr}>_{Msg.NewPass}
                 <input id=#{idAttr} name=#{nameAttr} type=password required>
             <div>
-                _{Msg.ConfirmPass}
+                <label for=#{idAttr}-confirm>_{Msg.ConfirmPass}
                 <input id=#{idAttr}-confirm name=#{nameAttr} type=password required>
         |]
     }

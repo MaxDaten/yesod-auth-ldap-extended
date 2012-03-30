@@ -305,6 +305,7 @@ postForgetR auth bind = do
     tm <- getRouteToMaster
     let verUrl = render $ tm $ verify (toPathPiece mid) verKey
     sendForgetEmail email verKey verUrl
+    setMessageI Msg.ConfirmationEmailSentTitle
     defaultLayout $ do
         setTitleI Msg.ConfirmationEmailSentTitle
         [whamlet| <p>_{Msg.ConfirmationEmailSent email} |]
