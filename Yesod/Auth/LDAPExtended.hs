@@ -22,7 +22,8 @@ module Yesod.Auth.LDAPExtended
     , registerR
     , loginR
     , forgetR 
-    
+    , termsOfServiceR
+    , privacyPolicyR
     -- * exposed modules
     --, module Yesod.Auth.Ldap.Handler
     , module Yesod.Auth.Ldap.YesodAuthLdap
@@ -124,9 +125,9 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
     dispatch "GET"  ["forget-password"] = getForgetR >>= sendResponse
     dispatch "POST" ["forget-password"] = postForgetR config bindConfig >>= sendResponse
 
-    dispatch "GET"  ["privacy-policy"] = getTermsOfServiceR >>= sendResponse
+    dispatch "GET"  ["privacy-policy"] = getPrivacyPolicyR >>= sendResponse
 
-    dispatch "GET"  ["terms-of-service"] = getPrivacyPolicyR >>= sendResponse
+    dispatch "GET"  ["terms-of-service"] = getTermsOfServiceR >>= sendResponse
     
     dispatch _ _              = notFound
 
