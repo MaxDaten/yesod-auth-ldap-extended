@@ -59,10 +59,12 @@ import Yesod.Auth.LdapMessages (LdapMessage, defaultMessage)
 import Yesod.Auth.Ldap.Handler.Password
 import Yesod.Auth.Ldap.YesodAuthLdap
 
-registerR, loginR, forgetR :: AuthRoute
+registerR, loginR, forgetR, termsOfServiceR, privacyPolicyR :: AuthRoute
 registerR   = PluginR "ldap" ["register"]
 loginR      = PluginR "ldap" ["login"]
 forgetR     = PluginR "ldap" ["forget-password"]
+termsOfServiceR = PluginR "ldap" ["terms-of-service"]
+privacyPolicyR  = PluginR "ldap" ["privacy-policy"]
 
 verify :: Text -> Text -> AuthRoute
 verify eid verkey = PluginR "ldap" ["verify", eid, verkey]
@@ -121,6 +123,10 @@ genericAuthLDAP config bindConfig = AuthPlugin "ldap" dispatch $ \tm ->
     
     dispatch "GET"  ["forget-password"] = getForgetR >>= sendResponse
     dispatch "POST" ["forget-password"] = postForgetR config bindConfig >>= sendResponse
+
+    dispatch "GET"  ["privacy-policy"] = getTermsOfServiceR >>= sendResponse
+
+    dispatch "GET"  ["terms-of-service"] = getPrivacyPolicyR >>= sendResponse
     
     dispatch _ _              = notFound
 
@@ -174,6 +180,8 @@ getRegisterR = do
     defaultLayout $ do
         [whamlet|
 <p>_{LdapM.EnterEmailLong}
+<div id=disclaimer>
+<p>Mit der Übermittlung deiner E-Mail Adresse stimmst du unseren <a href="@{toMaster termsOfServiceR}">Nutzungsbedingungen</a> und unserer <a href="@{toMaster privacyPolicyR}">Datenschutzbestimmungen</a> zu
 <form method="post" action="@{toMaster registerR}">
     <label for="email">_{Msg.Email}
     <input type="email" name="email" width="150" required>
@@ -299,6 +307,7 @@ postForgetR auth bind = do
     defaultLayout $ do
         setTitleI Msg.ConfirmationEmailSentTitle
         [whamlet| <p>_{Msg.ConfirmationEmailSent email} |]
+
 
 {--
     utility functions

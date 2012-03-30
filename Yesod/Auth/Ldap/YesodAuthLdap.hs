@@ -18,7 +18,7 @@ module Yesod.Auth.Ldap.YesodAuthLdap
 import Yesod.Auth
 import Yesod.Message (RenderMessage (..))
 
-
+import Yesod.Content
 import Yesod.Form
 import Yesod.Handler
 
@@ -49,6 +49,10 @@ class (YesodAuth m, RenderMessage m FormMessage) => YesodAuthLdap m where
     
     renderLdapMessage :: m -> [Text] -> LdapMessage -> Text
     renderLdapMessage _ _ = LdapM.defaultMessage
+    
+    getTermsOfServiceR :: GHandler Auth m RepHtml 
+    getPrivacyPolicyR :: GHandler Auth m RepHtml 
+            
 
     
 instance YesodAuthLdap m => RenderMessage m LdapMessage where
