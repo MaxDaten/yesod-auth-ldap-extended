@@ -1,5 +1,5 @@
 name:            yesod-auth-ldap-extended
-version:         0.0.0.3
+version:         0.0.0.4
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Litchard, Jan-Philip Loos
