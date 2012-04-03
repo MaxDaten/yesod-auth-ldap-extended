@@ -1,5 +1,5 @@
 name:            yesod-auth-ldap-extended
-version:         0.0.0.4
+version:         0.0.1.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Litchard, Jan-Philip Loos
@@ -30,7 +30,7 @@ library
                    , hamlet                  >= 0.10      && < 0.11
                    , yesod-form              >= 0.4       && < 0.5
                    , transformers            >= 0.2.2     && < 0.3
-                   , authenticate-ldap       == 0.2.0
+                   , authenticate-ldap       == 0.2.1
                    , random                  >= 1.0.0.3   && < 1.1
                    , mime-mail               >= 0.3       && < 0.5
 

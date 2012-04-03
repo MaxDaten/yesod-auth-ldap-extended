@@ -24,6 +24,7 @@ module Yesod.Auth.Ldap.Handler.Password
 import Yesod.Auth
 import Control.Applicative
 import Data.Text (Text)
+import Data.Text.Encoding as E
 import qualified Data.Text as TS
 
 import Yesod.Message (RenderMessage (..))
@@ -75,7 +76,7 @@ getResetPassR = do
         setTitleI Msg.SetPassTitle
         [whamlet|
             <h3>_{LdapM.ChangePassword}
-            <form method="post" action="@{toMaster resetpassR}">
+            <form method="post" action="@{toMaster resetpassR}" enctype=#{enctype}>
                 ^{widget}
                 <input type="submit" value=_{Msg.ConfirmPass}>
         |]
@@ -130,7 +131,7 @@ getNewUserR = do
         setTitleI Msg.SetPassTitle
         [whamlet|
             <h3>_{Msg.Register}
-            <form method="post" action="@{toMaster setpassR}">
+            <form method="post" action="@{toMaster setpassR}" enctype=#{enctype}>
                 ^{widget}
                 <input type="submit" value=_{Msg.Register}>
         |]
@@ -189,7 +190,7 @@ getChangePassR = do
         setTitleI Msg.SetPassTitle
         [whamlet|
             <h3>_{LdapM.ChangePassword}
-            <form method="post" action="@{toMaster changepassR}">
+            <form method="post" action="@{toMaster changepassR}" enctype=#{enctype}>
                 ^{widget}
                 <input type="submit" value=_{Msg.ConfirmPass}>
         |]
@@ -217,7 +218,8 @@ postChangePassR auth bind =
             _ -> do
                 setMessage $ toHtml ("Unbekannter Fehler" :: Text)
                 redirect $ loginDest y
-                
+        
+        -- !!! liftIO $ putStrLn $ show $ TS.pack $ TS.unpack new
         ok <- login aid old auth bind
         
         when (not ok)  $ do
@@ -314,9 +316,8 @@ newPasswordFields = Field
         <div id=newPass>
             <div id=pass-length-hint>
                 Das Passwort muss aus mindestens 6 Zeichen bestehen
-            <div>
-                <label for=#{idAttr}>_{Msg.NewPass}
-                <input id=#{idAttr} name=#{nameAttr} type=password required>
+            <label for=#{idAttr}>_{Msg.NewPass}
+            <input id=#{idAttr} name=#{nameAttr} type=password required>
             <div>
                 <label for=#{idAttr}-confirm>_{Msg.ConfirmPass}
                 <input id=#{idAttr}-confirm name=#{nameAttr} type=password required>

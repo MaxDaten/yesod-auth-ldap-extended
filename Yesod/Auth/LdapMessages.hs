@@ -55,7 +55,7 @@ germanMessage WrongOldPassword = "Das alte Passwort ist falsch."
 germanMessage ChangePassword = "Passwort ändern"
 germanMessage ForgetPassword = "Passwort vergessen"
 germanMessage Send           = "Abschicken"
-germanMessage ForgetLong     = "Wenn du dein Passwort vergessen hast, trage deine E-Mail ein. Dann erhälst du einen Link per E-Mail, über den du ein neues Passwort wählen kannst"
+germanMessage ForgetLong     = "Wenn du dein Passwort vergessen hast, trage deine E-Mail ein. Du erhältst dann eine E-Mail mit einem Link. Klicke ihn an, um ein neues Passwort zu wählen."
 germanMessage (RegistrationError UsernameUsed username) = "Der Benutzername " `mappend` username `mappend` " ist schon in Benutzung."
 germanMessage (RegistrationError e text) = 
     "Ein unbekannter Fehler ist aufgetreten: " `mappend` 
@@ -66,4 +66,4 @@ germanMessage (PasswordUpdateError (UnexpectedPassUpdateError e)) = "Es ist ein 
 germanMessage (PasswordUpdateError _) = undefined -- TDOD rethink errorhandling
 germanMessage (LoginError InitialBindFail) = "Unerwarteter Fehler aufgetreten."
 germanMessage (LoginError _) = "Falsches Passwort oder Benutzer nicht gefunden."
-germanMessage EnterEmailLong = "Um dich zu Registrieren musst zu zunächst deine E-Mail Adresse eingeben. Du erhälst dann eine E-Mail mit einem Link, über den du dann bestätigen kannst, dass die Adresse dir gehört. Danach kannst du einen Benutzernamen und ein Passwort wählen."
+germanMessage EnterEmailLong = "Um dich zu registrieren, gib bitte zunächst deine E-Mail Adresse ein. Du erhältst dann eine E-Mail mit einem Link. Klicke ihn an, um zu bestätigen, dass die Adresse dir gehört. Danach kannst du einen Benutzernamen und ein Passwort wählen."
