@@ -198,7 +198,15 @@ postRegisterR :: (YesodAuthLdap master)
 postRegisterR auth bind = do
     y <- getYesod
     email <- runInputPost $ ireq emailField "email"
-    (EmailRes entry) <- liftIO $ getByEmail email auth bind
+    
+    e <- liftIO $ getByEmail email auth bind
+    entry <- case e of
+        (EmailRes en) -> return en
+        _ -> do
+            toMaster <- getRouteToMaster
+            setMessageI LdapM.EmailAlreadyRegistered
+            redirect $ toMaster forgetR
+            
     (mid, verKey) <-
         case entry of
             -- verification entry already existing
