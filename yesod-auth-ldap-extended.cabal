@@ -1,5 +1,5 @@
 name:            yesod-auth-ldap-extended
-version:         0.0.0.1
+version:         0.0.1.0
 license:         BSD3
 license-file:    LICENSE
 author:          Michael Litchard, Jan-Philip Loos
@@ -26,14 +26,20 @@ library
                    , yesod-core              >= 0.10      && < 0.11
                    , yesod-auth              >= 0.8       && < 0.9
                    , text                    >= 0.7       && < 0.12
+                   , blaze-html              >= 0.4.3.1   && < 0.5
                    , hamlet                  >= 0.10      && < 0.11
                    , yesod-form              >= 0.4       && < 0.5
                    , transformers            >= 0.2.2     && < 0.3
-                   , authenticate-ldap       == 0.0.2
+                   , authenticate-ldap       == 0.2.1
+                   , random                  >= 1.0.0.3   && < 1.1
+                   , mime-mail               >= 0.3       && < 0.5
 
-    exposed-modules: Yesod.Auth.LDAP
+    exposed-modules: Yesod.Auth.Ldap.YesodAuthLdap
+                     Yesod.Auth.LDAPExtended
+                     Yesod.Auth.LdapMessages
+    other-modules:   Yesod.Auth.Ldap.Handler.Password
+
     ghc-options:     -Wall
-    include-dirs: include
 
 source-repository head
   type:     git
