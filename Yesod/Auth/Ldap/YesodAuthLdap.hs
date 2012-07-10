@@ -39,7 +39,7 @@ type VerKey = Text
 type VerUrl = Text
 type Pass   = Text
 
-class (YesodAuth m, RenderMessage m FormMessage) => YesodAuthLdap m where
+class (YesodAuth m, RenderMessage m FormMessage, RenderMessage m LdapMessage) => YesodAuthLdap m where
     --type AuthLdapId m
     sendVerifyEmail :: Email -> VerKey -> VerUrl -> GHandler Auth m ()
     sendForgetEmail :: Email -> VerKey -> VerUrl -> GHandler Auth m ()
@@ -52,8 +52,3 @@ class (YesodAuth m, RenderMessage m FormMessage) => YesodAuthLdap m where
     
     getTermsOfServiceR :: GHandler Auth m RepHtml 
     getPrivacyPolicyR :: GHandler Auth m RepHtml 
-            
-
-    
-instance YesodAuthLdap m => RenderMessage m LdapMessage where
-    renderMessage = renderLdapMessage

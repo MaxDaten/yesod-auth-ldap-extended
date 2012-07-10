@@ -230,7 +230,10 @@ postRegisterR auth bind = do
     sendVerifyEmail email verKey verUrl
     defaultLayout $ do
         setTitleI Msg.ConfirmationEmailSentTitle
-        [whamlet| <p>_{Msg.ConfirmationEmailSent email} |]
+        [whamlet| <p>_{LdapM.ConfirmationEmailSent email}
+                  <p>
+                        <strong>_{LdapM.ConfirmationEmailSentSpam}
+        |]
 
 
 

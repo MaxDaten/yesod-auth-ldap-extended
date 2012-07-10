@@ -22,6 +22,7 @@ module Yesod.Auth.Ldap.Handler.Password
 
 --import Yesod
 import Yesod.Auth
+import Yesod.Core (SomeMessage (..))
 import Control.Applicative
 import Data.Text (Text)
 import Data.Text.Encoding as E
@@ -218,8 +219,7 @@ postChangePassR auth bind =
             _ -> do
                 setMessage $ toHtml ("Unbekannter Fehler" :: Text)
                 redirect $ loginDest y
-        
-        -- !!! liftIO $ putStrLn $ show $ TS.pack $ TS.unpack new
+
         ok <- login aid old auth bind
         
         when (not ok)  $ do
@@ -267,41 +267,24 @@ getHandleAuth = do
             redirect $ toMaster LoginR
 
 
-
-
 newUserForm :: YesodAuthLdap m
             => Html -> MForm sub m (FormResult Cr, GWidget sub m ())
 newUserForm = renderTable $ Cr
-        <$> areq textField (fs LdapM.Username) Nothing
+        <$> areq textField (fieldSettingsLabel $ SomeMessage LdapM.Username) Nothing
         <*> areq newPasswordFields ("") Nothing
-    where 
-        fs msg = FieldSettings
-            { fsLabel = msg
-            , fsTooltip = Nothing
-            , fsId = Nothing
-            , fsName = Nothing
-            , fsClass = []
-            }
 
 resetPassForm :: YesodAuthLdap m
             => Html -> MForm sub m (FormResult Text, GWidget sub m ())
 resetPassForm = renderTable $ areq newPasswordFields ("") Nothing
 
   
-changePassForm :: YesodAuthLdap m
+changePassForm :: (YesodAuthLdap m, RenderMessage m LdapMessage)
             => Html -> MForm sub m (FormResult (Text, Text), GWidget sub m ())
 changePassForm = renderTable $ (,)
-        <$> areq passwordField (fs LdapM.OldPassword) Nothing
+        <$> areq passwordField (fieldSettingsLabel $ SomeMessage LdapM.OldPassword) Nothing
         <*> areq newPasswordFields ("") Nothing
-    where 
-        fs msg = FieldSettings
-            { fsLabel = msg
-            , fsTooltip = Nothing
-            , fsId = Nothing
-            , fsName = Nothing
-            , fsClass = []
-            }
-        
+
+
 newPasswordFields :: YesodAuthLdap master
                      => Field sub master Text
 newPasswordFields = Field

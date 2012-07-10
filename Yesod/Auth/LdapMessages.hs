@@ -9,6 +9,7 @@ import Data.Monoid (mappend)
 import Data.Text (Text, pack)
 import Web.Authenticate.LDAP
 
+
 data LdapMessage = EmailAlreadyRegistered
                  | EmailNotRegistered
                  | Username
@@ -16,6 +17,8 @@ data LdapMessage = EmailAlreadyRegistered
                  | WrongOldPassword
                  | ChangePassword
                  | ForgetPassword
+                 | ConfirmationEmailSent Text
+                 | ConfirmationEmailSentSpam
                  | Send
                  | EnterEmailLong
                  | LoginError LDAPAuthResult
@@ -24,6 +27,7 @@ data LdapMessage = EmailAlreadyRegistered
                  | ValidationPassMismatch
                  | ValidationNotAEmail
                  | PasswordUpdateError LDAPPassUpdateResult
+
 
 defaultMessage :: LdapMessage -> Text
 defaultMessage = englishMessage
@@ -43,6 +47,11 @@ englishMessage (PasswordUpdateError _) = undefined  -- TDOD rethink errorhandlin
 englishMessage (LoginError InitialBindFail) = "Unexpected error during login."
 englishMessage (LoginError _) = "User not found or wrong password."
 englishMessage EnterEmailLong = "Enter your e-mail address to star the registration."
+englishMessage ConfirmationEmailSentSpam = "Please check your spam folder."
+englishMessage (ConfirmationEmailSent email) = 
+    "A confirmation e-mail has been sent to " `mappend`
+    email `mappend`
+    "."
 
 
 
@@ -67,3 +76,8 @@ germanMessage (PasswordUpdateError _) = undefined -- TDOD rethink errorhandling
 germanMessage (LoginError InitialBindFail) = "Unerwarteter Fehler aufgetreten."
 germanMessage (LoginError _) = "Falsches Passwort oder Benutzer nicht gefunden."
 germanMessage EnterEmailLong = "Um dich zu registrieren, gib bitte zunächst deine E-Mail Adresse ein. Du erhältst dann eine E-Mail mit einem Link. Klicke ihn an, um zu bestätigen, dass die Adresse dir gehört. Danach kannst du einen Benutzernamen und ein Passwort wählen."
+germanMessage ConfirmationEmailSentSpam = "Solltest du scheinbar keine E-Mail erhalten haben, prüfe bitte deinen Spam-Ordner."
+germanMessage (ConfirmationEmailSent email) = 
+    "Eine Bestätigung wurde an " `mappend`
+    email `mappend`
+    " versandt."
