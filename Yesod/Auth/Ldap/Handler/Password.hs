@@ -35,7 +35,7 @@ import Yesod.Auth.LdapMessages (LdapMessage, defaultMessage)
 
 import Control.Monad (when)  
 
-import Text.Blaze (Html, toHtml)
+import Text.Blaze (Markup, toMarkup)
 
 import Yesod.Form
 import Yesod.Handler
@@ -100,10 +100,10 @@ postResetPassR auth bind = do
     pass <- case res of
         FormSuccess e -> return e
         FormFailure [e] -> do 
-                setMessage $ toHtml e
+                setMessage $ toMarkup e
                 redirect $ toMaster resetpassR
         _ -> do
-                setMessage $ toHtml ("Unbekannter Fehler" :: Text)
+                setMessage $ toMarkup ("Unbekannter Fehler" :: Text)
                 redirect $ loginDest y
     
     res <- updatePassword aid pass auth bind
@@ -156,10 +156,10 @@ postNewUserR auth bind =
         cr <- case res of
             FormSuccess e -> return e
             FormFailure [e] -> do 
-                setMessage $ toHtml e
+                setMessage $ toMarkup e
                 redirect $ toMaster setpassR
             _ -> do
-                setMessage $ toHtml ("Unbekannter Fehler" :: Text)
+                setMessage $ toMarkup ("Unbekannter Fehler" :: Text)
                 redirect $ loginDest y
         
         res <- register (crUsername cr) (crPassword cr) aid auth bind
@@ -214,10 +214,10 @@ postChangePassR auth bind =
         (old,new) <- case res of
             FormSuccess e -> return e
             FormFailure [e] -> do 
-                setMessage $ toHtml e
+                setMessage $ toMarkup e
                 redirect $ toMaster changepassR
             _ -> do
-                setMessage $ toHtml ("Unbekannter Fehler" :: Text)
+                setMessage $ toMarkup ("Unbekannter Fehler" :: Text)
                 redirect $ loginDest y
 
         ok <- login aid old auth bind
@@ -267,19 +267,19 @@ getHandleAuth = do
             redirect $ toMaster LoginR
 
 
-newUserForm :: YesodAuthLdap m
-            => Html -> MForm sub m (FormResult Cr, GWidget sub m ())
+newUserForm :: (YesodAuthLdap m)
+            => Markup -> MForm sub m (FormResult Cr, GWidget sub m ())
 newUserForm = renderTable $ Cr
         <$> areq textField (fieldSettingsLabel $ SomeMessage LdapM.Username) Nothing
         <*> areq newPasswordFields ("") Nothing
 
 resetPassForm :: YesodAuthLdap m
-            => Html -> MForm sub m (FormResult Text, GWidget sub m ())
+            => Markup -> MForm sub m (FormResult Text, GWidget sub m ())
 resetPassForm = renderTable $ areq newPasswordFields ("") Nothing
 
   
-changePassForm :: (YesodAuthLdap m, RenderMessage m LdapMessage)
-            => Html -> MForm sub m (FormResult (Text, Text), GWidget sub m ())
+changePassForm :: (YesodAuthLdap m)
+            => Markup -> MForm sub m (FormResult (Text, Text), GWidget sub m ())
 changePassForm = renderTable $ (,)
         <$> areq passwordField (fieldSettingsLabel $ SomeMessage LdapM.OldPassword) Nothing
         <*> areq newPasswordFields ("") Nothing
