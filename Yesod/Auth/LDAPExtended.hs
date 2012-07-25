@@ -43,7 +43,7 @@ import Network.Mail.Mime (randomString)
 import Data.Text (Text)
 import Data.Maybe (fromJust)
 import Text.Hamlet
-import Text.Blaze (toHtml)
+import Text.Blaze (toMarkup)
 import Control.Monad                 (when)  
 import Control.Monad.IO.Class (liftIO)
 import Control.Applicative ((<$>), (<*>))
@@ -144,7 +144,7 @@ postLoginR config bindConfig = do
         <*> iopt textField "password"
 
     let errorMessage (message :: Text) = do
-        setMessage $ toHtml message
+        setMessage $ toMarkup message
         toMaster <- getRouteToMaster
         redirect $ toMaster LoginR
 

@@ -270,7 +270,7 @@ getHandleAuth = do
 newUserForm :: (YesodAuthLdap m)
             => Markup -> MForm sub m (FormResult Cr, GWidget sub m ())
 newUserForm = renderTable $ Cr
-        <$> areq textField (fieldSettingsLabel $ SomeMessage LdapM.Username) Nothing
+        <$> areq textField (fieldSettingsLabel LdapM.Username) Nothing
         <*> areq newPasswordFields ("") Nothing
 
 resetPassForm :: YesodAuthLdap m
@@ -281,7 +281,7 @@ resetPassForm = renderTable $ areq newPasswordFields ("") Nothing
 changePassForm :: (YesodAuthLdap m)
             => Markup -> MForm sub m (FormResult (Text, Text), GWidget sub m ())
 changePassForm = renderTable $ (,)
-        <$> areq passwordField (fieldSettingsLabel $ SomeMessage LdapM.OldPassword) Nothing
+        <$> areq passwordField (fieldSettingsLabel LdapM.OldPassword) Nothing
         <*> areq newPasswordFields ("") Nothing
 
 
